@@ -1,4 +1,4 @@
-# Phase 1 configuration baseline
+# Configuration baseline
 
 The baseline is a project-defined set of six explainable checks on normalized
 snapshot assertions. It does not evaluate full IAM, network, or storage policy
@@ -23,13 +23,14 @@ All findings include the exact checked configuration fields as evidence.
 
 Public storage may be intentionally public. A wildcard policy may be bounded by
 conditions or deny policies not represented in the simplified schema. Logging
-may be configured at an organization scope a future collector must consider.
+may be configured at an organization scope the current collectors cannot fully evaluate.
 Encryption defaults and identity enforcement differ between providers. Imported
 flags must describe effective behavior, not simply one raw API setting.
 
-Review findings in context. This phase does not claim false-positive reduction
-or cloud-wide coverage. Provider collectors and an evaluated anomaly model can
-extend the baseline later without misrepresenting current results.
+Review findings in context. The project does not claim false-positive reduction
+or cloud-wide coverage. Phase 2 adds provider collectors and an activity model
+with separate evidence and measured evaluation. See `docs/cloud-collectors.md`
+for mapping limits and `docs/model.md` for model evaluation.
 
 ## Reference material
 

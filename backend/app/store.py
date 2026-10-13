@@ -8,6 +8,7 @@ from uuid import uuid4
 
 from .models import Inventory
 from .rules import scan_resources
+from .activity import aggregate
 
 
 def now() -> str:
@@ -44,10 +45,21 @@ class Store:
         finally:
             conn.close()
 
-    def scan(self, inventory: Inventory, source: str) -> dict:
+    def scan(self, inventory: Inventory, source: str, model=None, collection=None) -> dict:
         import time
         started = time.perf_counter()
         result = scan_resources(inventory.resources)
+        for finding in result["findings"]:
+            finding["detection_method"] = "rule"
+        result["phase"] = 2 if model is not None else 1
+        result["activity"] = {"event_count": len(inventory.events), "windows": [], "model": None}
+        if model is not None:
+            windows, anomalies, metadata = model.score(aggregate(inventory.events))
+            result["findings"].extend(anomalies)
+            result["activity"] = {"event_count": len(inventory.events), "windows": windows, "model": metadata}
+            result["summary"]["anomalies"] = len(anomalies)
+            result["summary"]["findings"] = len(result["findings"])
+        result["collection"] = collection
         result["resources"] = [r.model_dump() for r in inventory.resources]
         result["schema_version"] = inventory.schema_version
         scan = {"id": str(uuid4()), "created_at": now(), "source": source,
@@ -61,7 +73,7 @@ class Store:
         with self.connection() as conn:
             rows = conn.execute("SELECT * FROM scans ORDER BY rowid DESC LIMIT 100").fetchall()
         return [{k: row[k] for k in ("id", "created_at", "source", "name", "duration_ms")}
-                | {"summary": json.loads(row["snapshot"])["summary"]} for row in rows]
+                | {"summary": json.loads(row["snapshot"])["summary"], "phase": json.loads(row["snapshot"]).get("phase", 1)} for row in rows]
 
     def get_scan(self, scan_id: str | None = None) -> dict | None:
         with self.connection() as conn:
@@ -71,7 +83,11 @@ class Store:
         if row is None:
             return None
         result = json.loads(row["snapshot"])
+        result.setdefault("phase", 1)
+        result.setdefault("activity", {"event_count": 0, "windows": [], "model": None})
+        result.setdefault("collection", None)
         for finding in result["findings"]:
+            finding.setdefault("detection_method", "rule")
             disposition = dispositions.get(finding["id"], {})
             finding["status"] = disposition.get("status", "open")
             finding["updated_at"] = disposition.get("updated_at")

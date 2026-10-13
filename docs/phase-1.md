@@ -46,9 +46,12 @@ The implemented Phase 1 feature scope is complete. Validation status is recorded
 in `docs/validation.md`, including outstanding visual and runtime checks.
 Local Git initialization was prevented by the
 session's read-only `.git` policy. `scripts/init-git.sh` performs it in the user's
-terminal. GitHub connection was explicitly deferred by the user.
+terminal. The repository has since been initialized with an origin configured.
 
 ## Proposed later work
+
+Phase 2 has now been implemented; see [docs/phase-2.md](phase-2.md).
+The following records the original Phase 1 proposal.
 
 Phase 2 should add least-privilege cloud collectors, clearly document mapping
 from raw provider data into normalized fields, and create an activity feature

@@ -5,13 +5,15 @@ from urllib.request import urlopen
 
 BASE = "http://127.0.0.1:8000"
 try:
-    for path in ("/api/v1/health", "/api/v1/scans/latest", "/api/v1/scans", "/api/v1/rules", "/api/v1/export"):
+    for path in ("/api/v1/health", "/api/v1/scans/latest", "/api/v1/scans", "/api/v1/rules", "/api/v1/model", "/api/v1/connectors", "/api/v1/export"):
         with urlopen(BASE + path, timeout=5) as response:
             assert response.status == 200
             value = json.load(response)
             if path.endswith("latest"):
                 assert value["summary"]["resources"] >= 1
-                assert value["source"] in ("demo", "import")
+                assert value["source"] in ("demo", "import", "live")
+            if path.endswith("health"):
+                assert value["phase"] == 2 and value["model_ready"]
             print(f"PASS {path}")
     with urlopen(BASE, timeout=5) as response:
         assert response.status == 200

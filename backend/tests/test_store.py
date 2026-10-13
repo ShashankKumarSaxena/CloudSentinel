@@ -1,4 +1,5 @@
 from pathlib import Path
+import json
 import tempfile
 import unittest
 
@@ -50,6 +51,25 @@ class StoreTest(unittest.TestCase):
         self.assertIsNone(self.store.triage("missing", "resolved"))
         self.store.scan(self.inventory, "demo")
         self.assertIsNone(self.store.triage("' OR 1=1 --", "resolved"))
+
+    def test_old_phase_one_snapshot_reads_without_rewriting_evidence(self):
+        scan = self.store.scan(self.inventory, "demo")
+        with self.store.connection() as conn:
+            row = conn.execute("SELECT snapshot FROM scans WHERE id = ?", (scan["id"],)).fetchone()
+            old = json.loads(row["snapshot"])
+            for key in ("phase", "activity", "collection"):
+                old.pop(key, None)
+            for finding in old["findings"]:
+                finding.pop("detection_method", None)
+            encoded = json.dumps(old)
+            conn.execute("UPDATE scans SET snapshot = ? WHERE id = ?", (encoded, scan["id"]))
+        loaded = self.store.get_scan(scan["id"])
+        self.assertEqual(loaded["phase"], 1)
+        self.assertEqual(loaded["activity"]["windows"], [])
+        self.assertTrue(all(f["detection_method"] == "rule" for f in loaded["findings"]))
+        with self.store.connection() as conn:
+            unchanged = conn.execute("SELECT snapshot FROM scans WHERE id = ?", (scan["id"],)).fetchone()[0]
+        self.assertEqual(unchanged, encoded)
 
 
 if __name__ == "__main__":

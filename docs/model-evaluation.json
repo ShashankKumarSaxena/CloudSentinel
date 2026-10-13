@@ -1,0 +1,87 @@
+{
+  "ready": true,
+  "id": "iforest-764a7560",
+  "algorithm": "Isolation Forest",
+  "type": "unsupervised anomaly detection",
+  "feature_version": "activity-hour-v1",
+  "features": [
+    "event_count",
+    "failure_rate",
+    "distinct_ips",
+    "distinct_regions",
+    "off_hours_rate",
+    "sensitive_rate"
+  ],
+  "sklearn_version": "1.8.0",
+  "created_at": "2026-10-13T19:22:08.060895+00:00",
+  "dataset": "Synthetic hourly cloud activity v1",
+  "provenance": "synthetic",
+  "threshold": 0.629254,
+  "calibration_quantile": 0.98,
+  "training_samples": 600,
+  "calibration_samples": 200,
+  "evaluation_samples": 480,
+  "dataset_sha256": "4a6917ec73127d6a687933a6e0bca087bd999d3d4f94bdcba358a0c5f21fa515",
+  "parameters": {
+    "n_estimators": 200,
+    "max_samples": 256,
+    "random_state": 42
+  },
+  "evaluation": {
+    "model": {
+      "precision": 0.7895,
+      "recall": 0.25,
+      "f1": 0.3797,
+      "false_positive_rate": 0.0222,
+      "true_positive": 30,
+      "false_positive": 8,
+      "true_negative": 352,
+      "false_negative": 90,
+      "roc_auc": 0.8684
+    },
+    "activity_baseline": {
+      "precision": 0.8841,
+      "recall": 0.5083,
+      "f1": 0.6455,
+      "false_positive_rate": 0.0222,
+      "true_positive": 61,
+      "false_positive": 8,
+      "true_negative": 352,
+      "false_negative": 59,
+      "roc_auc": null
+    },
+    "scenarios": {
+      "distributed_access": {
+        "samples": 30,
+        "flagged": 2,
+        "actual_anomalies": 30
+      },
+      "failed_access": {
+        "samples": 30,
+        "flagged": 12,
+        "actual_anomalies": 30
+      },
+      "legitimate_batch": {
+        "samples": 24,
+        "flagged": 1,
+        "actual_anomalies": 0
+      },
+      "normal": {
+        "samples": 336,
+        "flagged": 7,
+        "actual_anomalies": 0
+      },
+      "permission_changes": {
+        "samples": 30,
+        "flagged": 11,
+        "actual_anomalies": 30
+      },
+      "request_burst": {
+        "samples": 30,
+        "flagged": 5,
+        "actual_anomalies": 30
+      }
+    }
+  },
+  "notice": "Synthetic evaluation does not establish real-world detection accuracy. Scores are not probabilities. Retrain on reviewed local normal activity before relying on live results."
+}

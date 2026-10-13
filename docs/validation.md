@@ -1,73 +1,78 @@
-# Phase 1 validation evidence
+# Phase 2 validation evidence
 
-The implementation passes its backend and API tests, TypeScript checking, and
-production build. The user started the production demo server from a normal
-terminal and confirmed that the overview displays correctly with the green
-sidebar and 18 resources. Automated browser interaction remains unverified
-because the available browser and desktop connection tools failed to initialize.
+The Phase 2 backend, collectors, model pipeline, and dashboard pass automated
+checks. Cloud access was validated with synthetic data and mocked API responses
+as requested; no live-account scan is claimed. Phase 1 behavior remains covered.
 
-## Verified checks
+## Verified results
 
 | Check | Result | Evidence |
 | --- | --- | --- |
-| Backend and API suite | Passed | 25 tests using temporary SQLite databases and in-process ASGI requests, including static dashboard serving after the frontend build |
+| Backend/API/model/provider suite | Passed | 53 tests using temporary SQLite databases, local models, ASGI transport, AWS SDK Stubber, and mocked REST clients |
 | TypeScript | Passed | `npm --prefix frontend run check` |
-| Production dashboard | Passed | `npm --prefix frontend run build` produces HTML, CSS, and JavaScript |
-| Clean dependency install | Passed on this Mac | `npm ci` succeeded using an isolated cache populated from already cached package tarballs |
-| Shell and Python syntax | Passed | `bash -n` for setup/demo/dev/Git scripts; Python compilation |
-| Shipped baseline | Passed | 18 resources; 30 checks; 14 pass; 16 fail; 0 unknown; 47% posture |
-| Provider coverage | Passed | All three providers evaluated by the same schema and applicable rules |
-| Validation and atomic import | Passed | Invalid input rejected without replacing the latest valid scan |
-| Persistence and triage | Passed | Reopening the store preserves scans and statuses; evidence and score remain fixed |
-| Browser display | User-confirmed | User reported that http://127.0.0.1:8000 displays the overview correctly |
+| Production frontend | Passed | `npm --prefix frontend run build` |
+| Synthetic combined scan | Passed | 18 resources; 30 configuration checks; 330 events; six activity windows; 16 rule findings and three ML findings |
+| Model training/evaluation | Passed | 600 fitting rows, 200 calibration rows, 480 holdout rows; persisted model and evaluation report |
+| Configuration compatibility | Passed | Existing rules, missing-field semantics, persistence, and configuration-only import tests |
+| Provider mapping | Passed with mocks | AWS regional storage/security-group/event mapping; Azure container/activity mapping; GCP permission-failure handling |
+| API workflows | Passed | Demo/import, training/retraining, source labels, collection metadata, reports, and failed-operation preservation |
+| Bounded transport | Passed | Repeated page tokens and unexpected credential destinations rejected |
 
-## Important test scenarios
+The model evaluation is synthetic and reports its limitations: 78.95% precision,
+25% recall, 2.22% false-positive rate, and 90 missed anomalies out of 120. The fixed
+activity comparator has higher recall on this holdout. No real-world advantage
+or accuracy improvement is claimed.
 
-- Safe configurations produce no findings and a 100% baseline pass rate.
-- Missing required fields produce unknown and cannot inflate passed-check counts.
-- All-unknown inventories produce a null score.
-- IPv6 world access and all-port ingress detect exposed management access.
-- HTTPS-only public ingress does not fail the management-port rule.
-- Privileged humans without MFA are detected; non-admin workload identities are
-  not incorrectly subjected to a human MFA requirement.
-- Finding IDs are deterministic and distinct across providers.
-- Duplicate IDs, invalid CIDRs and ports, string booleans, extra fields,
-  malformed JSON, unsupported versions, and oversized imports are rejected.
-- Cross-origin writes and untrusted host headers are rejected.
-- First startup seeds one demo scan; subsequent startups do not add another seed.
-- Scan, triage, audit-event, report export, and historical retrieval flows work.
+## Meaningful test coverage
 
-## Session limits and honest status
+- UTC hourly aggregation separates accounts and principals.
+- Missing activity features and tiny windows are not scored.
+- IDs/feature rows cannot leak between train, calibration, and evaluation.
+- Threshold calibration is checked independently of evaluation labels.
+- Model artifacts reload with identical scores; malformed pointers are not loaded.
+- Demo normal windows remain normal; all three unusual windows generate ML findings.
+- Old configuration-only JSON remains valid and missing flags stay unknown.
+- AWS mock responses are validated against the actual SDK service models.
+- CIDR/port pairs remain attached to individual ingress rules.
+- Permission failures produce unknown values and explicit partial coverage.
+- Collection errors do not disclose provider secrets or replace valid snapshots.
+- Status checks do not call cloud APIs or return credentials.
+- Reports and immutable snapshots include the model version and distinct methods.
+- Legacy Phase 1 rows read compatibly without rewriting their stored evidence.
+- Concurrent scan and training requests return 409 while collection is active.
+- Batched scoring preserves individual-window results.
 
-This session could not access the npm registry or bind/connect to local service
-ports from shell tools. Cached dependencies enabled installation, type checking,
-and builds without registry access. In-process ASGI tests exercised real routing,
-validation, middleware, SQLite, and static-file responses without opening ports.
+## Verification limits
 
-The Browser runtime failed during initialization, and the desktop fallback also
-required unavailable service configuration. No automated screenshot, mobile
-viewport, browser console, or click-through verification is claimed. The user's
-display confirmation is recorded separately from automated verification.
+The shell environment previously blocked registry access and localhost sockets.
+The required Python libraries and frontend dependencies were available locally,
+so training, tests, and builds were executed without new registry access. API
+checks use real in-process routing/middleware/persistence rather than live ports.
 
-Writing `.git` is prohibited by this workspace's permission profile, so `git init`
-failed. A normal-terminal initialization script is included. The GitHub CLI token
-was invalid and the user chose to connect GitHub later. No commit, remote push,
-hosted deployment, or executed GitHub Actions result is claimed.
+Automated browser connection tools failed during Phase 1. Its original overview
+was user-confirmed. The new Phase 2 pages have build/type checks but do not yet
+have screenshot, mobile viewport, console, or browser click-through verification.
+No new user display confirmation is assumed.
 
-## Manual verification checklist
+Azure/gcloud CLIs and cloud accounts are not configured here. Their REST mapping
+and failure behavior were tested with mocks. The real credential chain, provider
+permissions, account-specific coverage, and network behavior need a configured
+account to verify end to end.
 
-- [x] Production overview displays on the user's machine.
-- [ ] Run a demo scan and see a new row in Scan history.
-- [ ] Filter findings by provider and severity; clear filters.
-- [ ] Open a finding, inspect evidence, acknowledge it, and reopen it.
-- [ ] Confirm dialog Escape and Tab behavior in the browser.
-- [ ] Inspect a resource and a historical scan.
-- [ ] Export a JSON report and verify its source label.
-- [ ] Import an inventory and verify the source changes to Imported snapshot.
-- [ ] Restore the bundled dataset with Run demo scan.
-- [ ] Check the navigation on a narrow/mobile viewport.
-- [ ] Run `make smoke` against the already running production demo.
-- [ ] Initialize Git locally and connect GitHub when ready.
+Git is now initialized and an origin is configured. Phase 2 changes are left
+for review; this session did not commit, push, deploy, or execute hosted CI.
 
-These checklist items cover runtime behavior and usability. The implementation
-and automated tests are complete for Phase 1.
+## Manual runtime checklist
+
+- [ ] Install updated requirements and restart the local server.
+- [ ] Run demo scan to create a Phase 2 snapshot while retaining older scans.
+- [ ] Open Activity analysis and inspect normal, anomaly, and feature evidence.
+- [ ] Open Model lab and compare model/comparator metrics and scenario misses.
+- [ ] Retrain the synthetic model and run another scan to see its new version.
+- [ ] Import configuration-only and activity inventories.
+- [ ] Inspect and triage an ML finding; verify its status survives reopening.
+- [ ] Export a report and verify source, method, model, and coverage fields.
+- [ ] Test navigation, dialogs, and filters at a narrow viewport.
+- [ ] Run `make smoke` against the running local server.
+
+Live collection is optional and must be initiated from a configured local account.

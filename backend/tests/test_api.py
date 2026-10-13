@@ -1,10 +1,14 @@
 import json
+import asyncio
+import threading
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
 
 from backend.app.main import create_app, MAX_IMPORT_BYTES
 from backend.tests.asgi_client import call
+from backend.app.models import Inventory
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -23,7 +27,8 @@ class ApiTest(unittest.IsolatedAsyncioTestCase):
     async def test_first_start_seeds_one_demo_and_health_is_available(self):
         status, body, headers = await call(self.app, "GET", "/api/v1/health")
         self.assertEqual(status, 200)
-        self.assertEqual(body["phase"], 1)
+        self.assertEqual(body["phase"], 2)
+        self.assertTrue(body["model_ready"])
         self.assertEqual(headers["x-content-type-options"], "nosniff")
         self.assertEqual(headers["cache-control"], "no-store")
         _, scans, _ = await call(self.app, "GET", "/api/v1/scans")
@@ -41,6 +46,8 @@ class ApiTest(unittest.IsolatedAsyncioTestCase):
         status, report, headers = await call(self.app, "GET", "/api/v1/export")
         self.assertEqual(status, 200)
         self.assertEqual(report["scan"]["summary"]["failed"], 16)
+        self.assertEqual(report["scan"]["summary"]["anomalies"], 3)
+        self.assertEqual(report["scan"]["summary"]["findings"], 19)
         self.assertIn("deterministic", report["detection_method"])
         self.assertIn("attachment", headers["content-disposition"])
 
@@ -91,6 +98,82 @@ class ApiTest(unittest.IsolatedAsyncioTestCase):
         async with second_app.router.lifespan_context(second_app):
             _, scans, _ = await call(second_app, "GET", "/api/v1/scans")
             self.assertEqual(len(scans), 1)
+
+    async def test_model_metadata_training_and_activity_import(self):
+        status, model, _ = await call(self.app, "GET", "/api/v1/model")
+        self.assertEqual(status, 200)
+        self.assertEqual(model["algorithm"], "Isolation Forest")
+        self.assertEqual(model["provenance"], "synthetic")
+        status, retrained, _ = await call(self.app, "POST", "/api/v1/model/train/demo")
+        self.assertEqual(status, 200)
+        self.assertNotEqual(retrained["id"], model["id"])
+        dataset = json.loads((ROOT / "data/ml/synthetic_dataset.json").read_text())
+        status, retrained, _ = await call(self.app, "POST", "/api/v1/model/train", dataset)
+        self.assertEqual(status, 200)
+        self.assertNotEqual(retrained["id"], model["id"])
+        inventory = json.loads((ROOT / "data/demo_activity_inventory.json").read_text())
+        status, scan, _ = await call(self.app, "POST", "/api/v1/scans/import", inventory)
+        self.assertEqual(status, 201)
+        self.assertEqual(scan["activity"]["event_count"], 330)
+        self.assertEqual(len(scan["activity"]["windows"]), 6)
+        self.assertEqual(scan["activity"]["model"]["id"], retrained["id"])
+        self.assertEqual(scan["summary"]["anomalies"], 3)
+
+    async def test_invalid_training_preserves_active_model(self):
+        _, before, _ = await call(self.app, "GET", "/api/v1/model")
+        status, _, _ = await call(self.app, "POST", "/api/v1/model/train", {"name": "invalid"})
+        self.assertEqual(status, 422)
+        _, after, _ = await call(self.app, "GET", "/api/v1/model")
+        self.assertEqual(after["id"], before["id"])
+
+    async def test_live_collection_is_explicit_and_records_coverage(self):
+        inventory = Inventory.model_validate_json((ROOT / "data/demo_activity_inventory.json").read_text())
+        metadata = {"provider": "aws", "read_only": True, "partial": True, "coverage": [{"scope": "IAM", "status": "unavailable"}]}
+        with patch("backend.app.main.collect", return_value=(inventory, metadata)) as collector:
+            status, scan, _ = await call(self.app, "POST", "/api/v1/scans/collect", {"provider": "aws"})
+            self.assertEqual(status, 201)
+            self.assertEqual(scan["source"], "live")
+            self.assertTrue(scan["collection"]["partial"])
+            collector.assert_called_once()
+
+    async def test_failed_collection_preserves_latest_and_masks_exception(self):
+        _, before, _ = await call(self.app, "GET", "/api/v1/scans/latest")
+        with patch("backend.app.main.collect", side_effect=RuntimeError("SECRET_TOKEN")):
+            status, error, _ = await call(self.app, "POST", "/api/v1/scans/collect", {"provider": "aws"})
+        self.assertEqual(status, 502)
+        self.assertNotIn("SECRET_TOKEN", json.dumps(error))
+        _, after, _ = await call(self.app, "GET", "/api/v1/scans/latest")
+        self.assertEqual(after["id"], before["id"])
+
+    async def test_connection_status_does_not_make_cloud_calls_or_return_tokens(self):
+        with patch("backend.app.main.collect") as collector:
+            status, connections, _ = await call(self.app, "GET", "/api/v1/connectors")
+            self.assertEqual(status, 200)
+            self.assertEqual({c["provider"] for c in connections}, {"aws", "azure", "gcp"})
+            collector.assert_not_called()
+            self.assertTrue(all("credential_source" in c and "token" not in c for c in connections))
+
+    async def test_concurrent_scan_and_training_rejected_during_collection(self):
+        entered, resume = threading.Event(), threading.Event()
+        inventory = Inventory.model_validate_json((ROOT / "data/demo_inventory.json").read_text())
+        def pending_collection(body):
+            entered.set()
+            resume.wait(timeout=3)
+            return inventory, {"partial": False, "read_only": True, "coverage": []}
+        with patch("backend.app.main.collect", side_effect=pending_collection):
+            task = asyncio.create_task(call(self.app, "POST", "/api/v1/scans/collect", {"provider": "aws"}))
+            try:
+                for _ in range(100):
+                    if entered.is_set():
+                        break
+                    await asyncio.sleep(.01)
+                self.assertTrue(entered.is_set())
+                for path in ("/api/v1/scans/demo", "/api/v1/model/train/demo"):
+                    status, _, _ = await call(self.app, "POST", path)
+                    self.assertEqual(status, 409)
+            finally:
+                resume.set()
+                await task
 
     @unittest.skipUnless((ROOT / "frontend/dist/index.html").exists(), "Build the frontend before checking static serving")
     async def test_built_dashboard_and_assets_are_served_beside_api(self):

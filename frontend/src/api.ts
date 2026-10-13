@@ -12,13 +12,15 @@ export interface Finding {
   resource_type: ResourceType; provider: Provider; region: string;
   account: string; description: string; remediation: string;
   evidence: Record<string, unknown>; status: Status; updated_at: string | null;
+  detection_method: 'rule' | 'ml';
 }
 export interface Summary {
   resources: number; total_checks: number; passed: number; failed: number;
   unknown: number; posture_score: number | null;
+  anomalies?: number; findings?: number;
 }
 export interface ScanRecord {
-  id: string; created_at: string; source: 'demo' | 'import';
+  id: string; created_at: string; source: 'demo' | 'import' | 'live'; phase: number;
   name: string; duration_ms: number; summary: Summary;
 }
 export interface Check {
@@ -27,7 +29,25 @@ export interface Check {
 }
 export interface Scan extends ScanRecord {
   resources: Resource[]; findings: Finding[]; checks: Check[];
+  activity: { event_count: number; windows: ActivityWindow[]; model: ModelStatus | null };
+  collection: { provider: Provider; account: string; read_only: boolean; partial: boolean; coverage: Coverage[] } | null;
 }
+export interface Coverage { scope: string; status: string; message?: string }
+export interface ActivityWindow {
+  id: string; provider: Provider; account: string; principal: string; window_start: string;
+  features: Record<string, number | null>; actions: string[];
+  status: 'normal' | 'anomaly' | 'insufficient_data'; score: number | null; threshold: number;
+  signals: { feature: string; value: number; baseline_deviation: number }[]; missing_features: string[];
+}
+export interface ModelMetrics { precision: number; recall: number; f1: number; false_positive_rate: number; true_positive: number; false_positive: number; true_negative: number; false_negative: number; roc_auc: number | null }
+export interface ModelStatus {
+  ready?: boolean; id: string; algorithm: string; type: string; feature_version: string; features: string[];
+  created_at: string; dataset: string; provenance: 'synthetic' | 'user_labeled'; threshold: number;
+  training_samples: number; calibration_samples: number; evaluation_samples: number;
+  evaluation: { model: ModelMetrics; activity_baseline: ModelMetrics; scenarios: Record<string, { samples: number; flagged: number; actual_anomalies: number }> };
+  notice: string;
+}
+export interface Connector { provider: Provider; credential_source: string; configured: boolean; scope: string; requires: string }
 export interface Rule {
   id: string; title: string; severity: Severity; category: string;
   type: ResourceType; description: string; remediation: string; fields: string[];
