@@ -1,0 +1,248 @@
+{
+  "schema_version": "1.0",
+  "name": "Multi-cloud sandbox",
+  "resources": [
+    {
+      "id": "arn:aws:demo/customer-exports",
+      "name": "aws-customer-exports",
+      "provider": "aws",
+      "type": "storage",
+      "region": "ap-south-1",
+      "account": "sandbox-aws",
+      "config": {
+        "public_access": true,
+        "encrypted": true
+      }
+    },
+    {
+      "id": "arn:aws:demo/internal-backups",
+      "name": "aws-internal-backups",
+      "provider": "aws",
+      "type": "storage",
+      "region": "ap-south-1",
+      "account": "sandbox-aws",
+      "config": {
+        "public_access": false,
+        "encrypted": false
+      }
+    },
+    {
+      "id": "arn:aws:demo/platform-admin",
+      "name": "aws-platform-admin",
+      "provider": "aws",
+      "type": "identity",
+      "region": "ap-south-1",
+      "account": "sandbox-aws",
+      "config": {
+        "permissions": [
+          "admin:manage"
+        ],
+        "admin": true,
+        "mfa_enabled": false
+      }
+    },
+    {
+      "id": "arn:aws:demo/build-service",
+      "name": "aws-build-service",
+      "provider": "aws",
+      "type": "identity",
+      "region": "ap-south-1",
+      "account": "sandbox-aws",
+      "config": {
+        "permissions": [
+          "*"
+        ],
+        "admin": false
+      }
+    },
+    {
+      "id": "arn:aws:demo/production-ingress",
+      "name": "aws-production-ingress",
+      "provider": "aws",
+      "type": "firewall",
+      "region": "ap-south-1",
+      "account": "sandbox-aws",
+      "config": {
+        "ingress_cidrs": [
+          "0.0.0.0/0"
+        ],
+        "ports": [
+          443,
+          22
+        ]
+      }
+    },
+    {
+      "id": "arn:aws:demo/account-audit-trail",
+      "name": "aws-account-audit-trail",
+      "provider": "aws",
+      "type": "audit",
+      "region": "ap-south-1",
+      "account": "sandbox-aws",
+      "config": {
+        "logging_enabled": false
+      }
+    },
+    {
+      "id": "azure:demo/customer-exports",
+      "name": "azure-customer-exports",
+      "provider": "azure",
+      "type": "storage",
+      "region": "centralindia",
+      "account": "sandbox-azure",
+      "config": {
+        "public_access": true,
+        "encrypted": true
+      }
+    },
+    {
+      "id": "azure:demo/internal-backups",
+      "name": "azure-internal-backups",
+      "provider": "azure",
+      "type": "storage",
+      "region": "centralindia",
+      "account": "sandbox-azure",
+      "config": {
+        "public_access": false,
+        "encrypted": false
+      }
+    },
+    {
+      "id": "azure:demo/platform-admin",
+      "name": "azure-platform-admin",
+      "provider": "azure",
+      "type": "identity",
+      "region": "centralindia",
+      "account": "sandbox-azure",
+      "config": {
+        "permissions": [
+          "admin:manage"
+        ],
+        "admin": true,
+        "mfa_enabled": false
+      }
+    },
+    {
+      "id": "azure:demo/build-service",
+      "name": "azure-build-service",
+      "provider": "azure",
+      "type": "identity",
+      "region": "centralindia",
+      "account": "sandbox-azure",
+      "config": {
+        "permissions": [
+          "*"
+        ],
+        "admin": false
+      }
+    },
+    {
+      "id": "azure:demo/production-ingress",
+      "name": "azure-production-ingress",
+      "provider": "azure",
+      "type": "firewall",
+      "region": "centralindia",
+      "account": "sandbox-azure",
+      "config": {
+        "ingress_cidrs": [
+          "0.0.0.0/0"
+        ],
+        "ports": [
+          443,
+          3389
+        ]
+      }
+    },
+    {
+      "id": "azure:demo/account-audit-trail",
+      "name": "azure-account-audit-trail",
+      "provider": "azure",
+      "type": "audit",
+      "region": "centralindia",
+      "account": "sandbox-azure",
+      "config": {
+        "logging_enabled": false
+      }
+    },
+    {
+      "id": "gcp:demo/customer-exports",
+      "name": "gcp-customer-exports",
+      "provider": "gcp",
+      "type": "storage",
+      "region": "asia-south1",
+      "account": "sandbox-gcp",
+      "config": {
+        "public_access": true,
+        "encrypted": true
+      }
+    },
+    {
+      "id": "gcp:demo/internal-backups",
+      "name": "gcp-internal-backups",
+      "provider": "gcp",
+      "type": "storage",
+      "region": "asia-south1",
+      "account": "sandbox-gcp",
+      "config": {
+        "public_access": false,
+        "encrypted": false
+      }
+    },
+    {
+      "id": "gcp:demo/platform-admin",
+      "name": "gcp-platform-admin",
+      "provider": "gcp",
+      "type": "identity",
+      "region": "asia-south1",
+      "account": "sandbox-gcp",
+      "config": {
+        "permissions": [
+          "admin:manage"
+        ],
+        "admin": true,
+        "mfa_enabled": false
+      }
+    },
+    {
+      "id": "gcp:demo/build-service",
+      "name": "gcp-build-service",
+      "provider": "gcp",
+      "type": "identity",
+      "region": "asia-south1",
+      "account": "sandbox-gcp",
+      "config": {
+        "permissions": [
+          "*"
+        ],
+        "admin": false
+      }
+    },
+    {
+      "id": "gcp:demo/production-ingress",
+      "name": "gcp-production-ingress",
+      "provider": "gcp",
+      "type": "firewall",
+      "region": "asia-south1",
+      "account": "sandbox-gcp",
+      "config": {
+        "ingress_cidrs": [
+          "0.0.0.0/0"
+        ],
+        "ports": [
+          443
+        ]
+      }
+    },
+    {
+      "id": "gcp:demo/account-audit-trail",
+      "name": "gcp-account-audit-trail",
+      "provider": "gcp",
+      "type": "audit",
+      "region": "asia-south1",
+      "account": "sandbox-gcp",
+      "config": {
+        "logging_enabled": true
+      }
+    }
+  ]
+}

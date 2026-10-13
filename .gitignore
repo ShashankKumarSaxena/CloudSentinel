@@ -1,0 +1,24 @@
+# Runtime and dependencies
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+node_modules/
+frontend/dist/
+*.db
+*.db-shm
+*.db-wal
+.runtime/
+coverage/
+
+# Local credentials and settings
+.env
+.env.*
+!.env.example
+.aws/
+.DS_Store
+*.log
+
+# Editor files
+.idea/
+.vscode/
