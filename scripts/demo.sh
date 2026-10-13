@@ -13,5 +13,5 @@ if [[ ! -d frontend/node_modules ]]; then
   exit 1
 fi
 npm --prefix frontend run build
-printf '\nCloudSentinel mentor demo: http://127.0.0.1:8000\nAPI documentation: http://127.0.0.1:8000/docs\nPress Ctrl+C to stop.\n\n'
+printf '\nCloudSentinel local workspace: http://127.0.0.1:8000\nAPI documentation: http://127.0.0.1:8000/docs\nPress Ctrl+C to stop.\n\n'
 exec "$PROJECT_PYTHON" -m uvicorn backend.app.main:app --host 127.0.0.1 --port 8000

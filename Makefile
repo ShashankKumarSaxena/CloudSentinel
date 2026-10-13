@@ -2,7 +2,7 @@
 PROJECT_PYTHON := $(if $(wildcard .venv/bin/python),.venv/bin/python,python3)
 
 help:
-	@printf 'CloudSentinel Phase 1\n\nmake setup     Install dependencies\nmake demo      Build and serve the mentor demo on :8000\nmake dev       Run API + Vite development mode\nmake test      Run isolated backend tests\nmake check     Run tests, TypeScript, and production build\nmake smoke     Check the running demo\nmake git-init  Initialize and commit locally\n'
+	@printf 'CloudSentinel Phase 1\n\nmake setup     Install dependencies\nmake demo      Build and serve the local workspace on :8000\nmake dev       Run API + Vite development mode\nmake test      Run isolated backend tests\nmake check     Run tests, TypeScript, and production build\nmake smoke     Check the running application\nmake git-init  Initialize and commit locally\n'
 setup:
 	bash scripts/setup.sh
 demo:

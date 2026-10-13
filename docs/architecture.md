@@ -68,7 +68,7 @@ Imports read and bound the request stream before validation. Blocking scan and
 SQLite work runs outside the async request loop. Mutations reject unrelated
 browser origins, and the API accepts local hosts only. SQL uses placeholders.
 
-Vite proxies local development requests to port 8000. For mentor demos,
+Vite proxies local development requests to port 8000. For local use,
 `scripts/demo.sh` builds the frontend first, then FastAPI serves `frontend/dist/`
 and the API on the same local origin. Navigation stays within the React app,
 so there is no client-side URL routing or fallback dependency.

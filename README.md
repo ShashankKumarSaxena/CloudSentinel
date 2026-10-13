@@ -12,7 +12,7 @@ working foundation and demo. This release implements that scope: **configuration
 baseline checks using synthetic data or imported JSON snapshots**. Live cloud
 collectors and ML anomaly detection remain future work.
 
-## Run the mentor demo
+## Run locally
 
 Requires Python 3.12+ and Node.js 22.12+ (Node 24 recommended), with npm.
 
@@ -57,23 +57,14 @@ The shipped dataset contains **18 resources**, **30 checks**, and **16 findings*
 of 14 passing checks out of 30 evaluated checks. This is a baseline score, not a
 compliance certification, ML confidence, detection accuracy, or probability of compromise.
 
-## Five-minute presentation
-
-1. Open Overview and explain the clearly labeled synthetic environment.
-2. Run a demo scan and show the updated timestamp and persisted scan history.
-3. Open a critical finding, explain its configuration evidence and remediation.
-4. Acknowledge it, then show the status filter and persistent triage history.
-5. Inspect a cloud resource and export a report.
-6. Open Project brief to distinguish delivered Phase 1 work from future ML work.
-
-The full presentation script, acceptance criteria, and scope are in
-[docs/mentor-demo.md](docs/mentor-demo.md) and [docs/phase-1.md](docs/phase-1.md).
+Acceptance criteria and project scope are documented in
+[docs/phase-1.md](docs/phase-1.md).
 
 ## Validation
 
 ```bash
 make check
-# With the mentor demo already running:
+# With the local application already running:
 make smoke
 ```
 
@@ -90,7 +81,7 @@ backend/tests/         Rule, validation, persistence, and API tests
 frontend/src/          React + TypeScript dashboard and responsive styling
 frontend/public/       Local static assets
 data/                  Synthetic normalized multi-cloud inventory
-docs/                  Phase scope, architecture, demonstration, validation
+docs/                  Phase scope, architecture, schema, validation
 scripts/               Setup, demo, development, smoke test, Git initialization
 .github/workflows/     Backend and frontend checks for GitHub Actions
 AGENTS.md              Project instructions and Phase 1 boundary
@@ -111,7 +102,7 @@ Resolving a finding records team triage; it does not alter scan evidence or
 verify a configuration change.
 
 This release binds to the local machine and has no multi-user authentication.
-Keep it on loopback for demonstrations. Do not put credentials in inventory JSON.
+Keep it on loopback for local use. Do not put credentials in inventory JSON.
 There is no automatic remediation or connection to real cloud services.
 
 ## Initialize Git and connect GitHub later

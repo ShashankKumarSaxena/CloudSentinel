@@ -54,7 +54,7 @@ failed. A normal-terminal initialization script is included. The GitHub CLI toke
 was invalid and the user chose to connect GitHub later. No commit, remote push,
 hosted deployment, or executed GitHub Actions result is claimed.
 
-## Manual presentation checklist
+## Manual verification checklist
 
 - [x] Production overview displays on the user's machine.
 - [ ] Run a demo scan and see a new row in Scan history.
@@ -69,5 +69,5 @@ hosted deployment, or executed GitHub Actions result is claimed.
 - [ ] Run `make smoke` against the already running production demo.
 - [ ] Initialize Git locally and connect GitHub when ready.
 
-These checklist items are presentation rehearsal checks, not additional Phase 2
-features. The implementation and automated tests are complete for Phase 1.
+These checklist items cover runtime behavior and usability. The implementation
+and automated tests are complete for Phase 1.

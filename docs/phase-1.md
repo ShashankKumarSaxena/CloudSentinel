@@ -5,7 +5,7 @@ GCP configuration and activity data. It does not specify phases. The user
 confirmed that Phase 1 should be a working foundation and demo.
 
 Phase 1 delivers a local prototype with a common configuration schema,
-explainable deterministic checks, persistent scan snapshots, and a presentable
+explainable deterministic checks, persistent scan snapshots, and a responsive
 dashboard. It creates the data and application foundation for subsequent live
 collection and anomaly detection.
 
@@ -31,7 +31,7 @@ collection and anomaly detection.
   inventory, historical snapshots, exports, and an in-app project brief.
 - Synthetic dataset and reproducible baseline counts.
 - Backend test suite, build checks, setup scripts, and GitHub Actions configuration.
-- `AGENTS.md`, architecture, import contract, and mentor demonstration notes.
+- `AGENTS.md`, architecture, import contract, and setup instructions.
 
 ## Explicitly outside Phase 1
 
@@ -43,8 +43,8 @@ provider policy evaluation; compliance certification.
 ## Completion and handoff
 
 The implemented Phase 1 feature scope is complete. Validation status is recorded
-in `docs/validation.md`; any unchecked visual or runtime checks must be completed
-before presenting the demo. Local Git initialization was prevented by the
+in `docs/validation.md`, including outstanding visual and runtime checks.
+Local Git initialization was prevented by the
 session's read-only `.git` policy. `scripts/init-git.sh` performs it in the user's
 terminal. GitHub connection was explicitly deferred by the user.
 
@@ -57,4 +57,4 @@ scenarios and report false positives, precision, recall, and evaluation limits.
 
 A later hardening phase can add authenticated access, background jobs, alerts,
 deployment, and continuous evaluation. These are proposed boundaries for future
-discussion with the mentor, not supplied requirements or implemented capabilities.
+planning, not supplied requirements or implemented capabilities.

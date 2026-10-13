@@ -5,7 +5,7 @@ Build the AI-Based Automated Multi-Cloud Vulnerability Detector described in
 `Cloud_Vulnerability_Detector_ProblemStatement_Abstract_1.docx`.
 The abstract does not define phases. The current Phase 1 is a working foundation:
 normalized configuration inventory, deterministic configuration checks, SQLite
-scan history, finding triage, and a presentable demo dashboard.
+scan history, finding triage, and a responsive security dashboard.
 
 Do only Phase 1 unless the user explicitly expands the scope. ML anomaly
 detection, activity ingestion, live AWS/Azure/GCP API collectors, continuous
@@ -16,7 +16,7 @@ Never represent fixture data as live cloud data or deterministic rules as AI.
 - `backend/`: Python 3.12+, FastAPI, Pydantic, SQLite; business logic in services.
 - `frontend/`: React, TypeScript, Vite, CSS; accessible responsive UI.
 - `data/demo_inventory.json`: synthetic cross-cloud configurations.
-- `docs/`: scope, architecture, mentor demonstration, validation evidence.
+- `docs/`: scope, architecture, setup instructions, validation evidence.
 - `scripts/`: repeatable setup, development, and verification commands.
 
 ## Working conventions
@@ -29,6 +29,7 @@ Never represent fixture data as live cloud data or deterministic rules as AI.
 - Keep scan snapshots immutable; finding disposition is a separate user action.
 - Use UTC for stored timestamps and local formatting in the interface.
 - Keep styling in CSS; provide keyboard focus, labels, and responsive layouts.
+- Use product-focused language in the interface and documentation.
 - Do not spawn subagents unless explicitly asked by the user.
 
 ## Verification
