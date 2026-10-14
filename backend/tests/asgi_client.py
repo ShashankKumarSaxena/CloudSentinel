@@ -11,6 +11,8 @@ async def call(app, method, path, body=None, raw=None, headers=None):
     if headers:
         request_headers = [(k, v) for k, v in request_headers if k.decode() not in headers]
         request_headers += [(key.encode(), value.encode()) for key, value in headers.items()]
+    session_headers = getattr(app, '_test_headers', {})
+    request_headers += [(key.encode(), value.encode()) for key, value in session_headers.items() if key not in (headers or {})]
     sent = False
     complete = asyncio.Event()
     messages = []

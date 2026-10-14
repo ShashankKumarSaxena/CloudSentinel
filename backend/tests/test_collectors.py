@@ -1,7 +1,10 @@
 from datetime import datetime, timezone
 import json
+import os
+from pathlib import Path
+import tempfile
 import unittest
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 import boto3
 from botocore.stub import Stubber
@@ -9,11 +12,38 @@ from botocore.stub import Stubber
 from backend.app.collectors.aws import collect_aws, public_storage
 from backend.app.collectors.azure import collect_azure, public_container, rule_ports
 from backend.app.collectors.gcp import collect_gcp, public_bucket, firewall_ports
-from backend.app.collectors.base import CollectionError, RestClient
+from backend.app.collectors.base import CollectionError, RestClient, local_token
 from backend.app.models import CollectionRequest
 
 
 class MappingTest(unittest.TestCase):
+    def test_mounted_token_is_read_locally_without_invoking_cli(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'token'
+            path.write_text('test-only-token\n')
+            with patch.dict(os.environ, {'TEST_TOKEN_FILE': str(path)}), patch('backend.app.collectors.base.cli_token') as cli:
+                self.assertEqual(local_token('TEST_TOKEN_FILE', ['unused']), 'test-only-token')
+                cli.assert_not_called()
+
+    def test_invalid_mounted_tokens_fail_safely_without_fallback(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'token'
+            for content in ('', 'secret\nsecond-line', 'x' * 16385):
+                path.write_text(content)
+                with patch.dict(os.environ, {'TEST_TOKEN_FILE': str(path)}), patch('backend.app.collectors.base.cli_token') as cli:
+                    with self.assertRaises(CollectionError) as error:
+                        local_token('TEST_TOKEN_FILE', ['unused'])
+                    self.assertNotIn('secret', str(error.exception))
+                    cli.assert_not_called()
+            path.unlink()
+            with patch.dict(os.environ, {'TEST_TOKEN_FILE': str(path)}), self.assertRaises(CollectionError):
+                local_token('TEST_TOKEN_FILE', ['unused'])
+
+    def test_no_mounted_token_uses_local_cli(self):
+        with patch.dict(os.environ, {}, clear=True), patch('backend.app.collectors.base.cli_token', return_value='test-only-token') as cli:
+            self.assertEqual(local_token('TEST_TOKEN_FILE', ['provider', 'token']), 'test-only-token')
+            cli.assert_called_once_with(['provider', 'token'])
+
     def test_storage_does_not_mark_ambiguous_access_safe(self):
         self.assertIsNone(public_storage({}, {"IsPublic": False}, {"Grants": []}))
         self.assertFalse(public_storage({k: True for k in ("BlockPublicAcls", "IgnorePublicAcls", "BlockPublicPolicy", "RestrictPublicBuckets")}, None, None))

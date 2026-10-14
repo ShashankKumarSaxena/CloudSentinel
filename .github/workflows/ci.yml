@@ -1,4 +1,4 @@
-name: Phase 1 checks
+name: CloudSentinel checks
 on:
   push:
   pull_request:
@@ -29,3 +29,23 @@ jobs:
         working-directory: frontend
       - run: npm run check && npm run build
         working-directory: frontend
+  docker:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker compose config --quiet
+      - run: docker compose up -d --build
+      - name: Wait for startup and inspect public routes
+        run: |
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent http://127.0.0.1:8000/api/v1/health >/dev/null; then break; fi
+            sleep 2
+          done
+          python3 scripts/smoke_test.py
+      - name: Container diagnostics on failure
+        if: failure()
+        run: docker compose logs --tail=100
+      - name: Stop temporary services
+        if: always()
+        run: docker compose down

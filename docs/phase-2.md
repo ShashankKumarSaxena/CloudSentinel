@@ -37,6 +37,10 @@ predicts real-world behavior.
 
 ## Phase boundary
 
+Phase 3 has since implemented monitoring, authenticated access, alerts, and a
+local Docker package. See [phase-3.md](phase-3.md). The boundary below records
+what was outside the original Phase 2 implementation.
+
 This phase completes the local collection and ML implementation. Live-account
 verification is unavailable by the user's selected validation scope. Collector
 coverage is deliberately bounded and partial, and the synthetic-trained model

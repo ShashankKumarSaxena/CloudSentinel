@@ -2,7 +2,7 @@
 from datetime import datetime, timezone
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, SecretStr, model_validator
 
 Provider = Literal["aws", "azure", "gcp"]
 ResourceType = Literal["storage", "identity", "firewall", "audit"]
@@ -150,3 +150,54 @@ class CollectionRequest(BaseModel):
 
 
 Inventory.model_rebuild()
+
+Role = Literal["admin", "analyst", "viewer"]
+
+
+class LoginRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    username: str = Field(min_length=1, max_length=80)
+    password: SecretStr = Field(min_length=1, max_length=256)
+
+
+class UserCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    username: str = Field(min_length=3, max_length=60, pattern=r"^[a-zA-Z0-9_.-]+$")
+    display_name: str = Field(min_length=1, max_length=80)
+    password: SecretStr = Field(min_length=12, max_length=256)
+    role: Role = "viewer"
+
+
+class UserUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    role: Role | None = None
+    enabled: bool | None = None
+
+
+class PasswordChange(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    current_password: SecretStr = Field(min_length=1, max_length=256)
+    new_password: SecretStr = Field(min_length=12, max_length=256)
+
+
+class ScheduleCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    name: str = Field(min_length=1, max_length=100)
+    kind: Literal["demo", "live"] = "demo"
+    interval_seconds: int = Field(default=3600, ge=60, le=604800)
+    enabled: bool = True
+    collection: CollectionRequest | None = None
+
+    @model_validator(mode="after")
+    def collection_scope(self):
+        if self.kind == "live" and self.collection is None:
+            raise ValueError("Live schedules require an explicit cloud collection scope")
+        if self.kind == "demo" and self.collection is not None:
+            raise ValueError("Synthetic schedules cannot include cloud credentials or collection settings")
+        return self
+
+
+class ScheduleUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    enabled: bool | None = None
+    interval_seconds: int | None = Field(default=None, ge=60, le=604800)

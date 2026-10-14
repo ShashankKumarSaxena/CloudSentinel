@@ -53,18 +53,32 @@ export interface Rule {
   type: ResourceType; description: string; remediation: string; fields: string[];
 }
 export interface TriageEvent { previous_status: Status; status: Status; created_at: string }
+export interface AuthUser { id: string; username: string; display_name: string; role: 'admin' | 'analyst' | 'viewer'; enabled: boolean; created_at: string }
+export interface AuthSession { user: AuthUser; csrf_token: string; expires_at: string }
+export interface AlertRecord { id: string; created_at: string; kind: string; severity: Severity; title: string; source: string; scan_id: string | null; finding_id: string | null; detail: Record<string, unknown>; acknowledged_at: string | null; acknowledged_by: string | null; delivery: string; attempts: number; delivery_error: string | null }
+export interface AlertInbox { items: AlertRecord[]; total: number; unread: number }
+export interface MonitorSchedule { id: string; name: string; kind: 'demo' | 'live'; collection: { provider: Provider; region: string; account: string | null; lookback_hours: number } | null; interval_seconds: number; enabled: boolean; next_run: string; last_run: string | null; last_status: string; last_error: string | null; failures: number }
+export interface MonitorRun { id: string; schedule_id: string; started_at: string; finished_at: string | null; status: string; scan_id: string | null; error: string | null }
+export interface WorkerStatus { enabled: boolean; running: boolean; last_tick: string | null; last_error: string | null; email_enabled: boolean; schedules: number; unread_alerts: number }
+export interface AuditRecord { id: number; created_at: string; actor: string; action: string; target: string; detail: Record<string, unknown> }
+
+let csrfToken = '';
+export function setSessionToken(token: string) { csrfToken = token; }
 
 export async function request<T>(path: string, options?: RequestInit): Promise<T> {
   let response: Response;
   try {
-    response = await fetch(`/api/v1${path}`, { ...options,
-      headers: { 'Content-Type': 'application/json', ...options?.headers },
+    response = await fetch(`/api/v1${path}`, { ...options, credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json', ...(csrfToken && options?.method && options.method !== 'GET' ? { 'X-CSRF-Token': csrfToken } : {}), ...options?.headers },
       signal: options?.signal ?? AbortSignal.timeout(15000),
     });
   } catch {
     throw new Error('Could not reach the local API. Make sure the backend is running on port 8000, then try again.');
   }
   if (!response.ok) {
+    if (response.status === 401 && csrfToken && path !== '/auth/login') {
+      setSessionToken(''); window.dispatchEvent(new Event('cloudsentinel-session-expired'));
+    }
     const body = await response.json().catch(() => ({}));
     const fields = body.errors?.map((e: {field: string; message: string}) => `${e.field}: ${e.message}`).slice(0, 3).join(' · ');
     throw new Error(`${typeof body.detail === 'string' ? body.detail : 'The request could not be completed.'}${fields ? ` ${fields}` : ''}`);

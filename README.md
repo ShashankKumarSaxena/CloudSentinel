@@ -1,17 +1,18 @@
 # CloudSentinel
 
-**A local multi-cloud security workspace with configuration checks and activity anomaly detection.**
+**A local multi-cloud security workspace with configuration checks, activity anomaly detection, and scheduled monitoring.**
 
 CloudSentinel reviews AWS, Azure, and GCP configuration and activity snapshots.
-It combines six explainable configuration checks with an **Isolation Forest**
-model, preserves evidence in SQLite, and provides resource inspection, finding
-triage, activity review, model evaluation, and JSON reports.
+Six explainable configuration checks and an **Isolation Forest** anomaly model
+produce separate findings, with evidence, triage, immutable history, and reports.
+**Phase 3 adds required sign-in, administrator/analyst/viewer roles, persistent
+monitoring schedules, an alert inbox, optional SMTP delivery, operational audit
+records, backup/recovery tools, and a local Docker deployment package.**
 
-Phase 1 established the configuration baseline. **Phase 2 adds read-only cloud
-collectors, event normalization, hourly features, ML inference, training, and
-held-out evaluation.** Live-account collection has not been verified: this
-release was tested with synthetic data and mocked provider APIs because no cloud
-accounts were configured.
+Cloud collection is validated with synthetic data and mocked provider APIs.
+No live-account validation is claimed. The Docker package has passed Compose
+configuration validation; image build and container execution are pending the
+user's Docker run. See [validation evidence](docs/validation.md).
 
 ## Run locally
 
@@ -19,19 +20,21 @@ Requires Python 3.12+ and Node.js 22.12+ with npm. Node 24 is recommended.
 
 ```bash
 bash scripts/setup.sh
+make create-admin
 bash scripts/demo.sh
 ```
 
-Open **http://127.0.0.1:8000**. The same server serves the dashboard and API;
-API documentation is at **http://127.0.0.1:8000/docs**. Dependencies need internet
-access for their initial installation. The installed synthetic workflow runs
-offline without cloud credentials or a separate database.
+The administrator command prompts for a username and a password of 12–256
+characters. There is no default account or password. Open
+**http://127.0.0.1:8000** and sign in. The same server serves the dashboard and
+API. On host installs, an offline API reference at `/docs` and request schemas
+at `/openapi.json` are available after sign-in. Dependencies need
+internet access for installation; the installed synthetic workflow runs offline.
 
-If the application was already running before the Phase 2 upgrade, stop it with
-Ctrl+C, install the updated backend requirements, and restart it. Existing scans
-are preserved. Click **Run demo scan** to create a Phase 2 snapshot with activity.
-
-For frontend development:
+For an existing Phase 1/2 install, stop the old server, install current
+dependencies, create the first administrator, and restart. Existing snapshots
+are preserved. Run a new demo scan to populate Phase 3 alerts; historical scans
+are not backfilled into the inbox. Keep one server process per database.
 
 ```bash
 bash scripts/dev.sh
@@ -39,35 +42,70 @@ bash scripts/dev.sh
 # API:       http://127.0.0.1:8000
 ```
 
+## Local Docker deployment
+
+With Docker Desktop running, from the project root:
+
+```bash
+docker compose config --quiet
+docker compose up -d --build
+docker compose exec cloudsentinel python scripts/manage_users.py create-admin
+```
+
+Open **http://127.0.0.1:8000** and sign in. First startup trains the bundled
+synthetic model; allow it to finish before creating the administrator. The
+container runs as a non-root user with a read-only root filesystem. SQLite and
+models persist in the `cloudsentinel-data` named volume. The supplied port binds
+to loopback and SMTP is disabled. If another server uses port 8000, stop it or
+run `CLOUDSENTINEL_PORT=8001 docker compose up -d --build` and open port 8001.
+
+See [deployment instructions](docs/deployment.md) for startup checks, mounted
+credentials, overrides, recovery, and troubleshooting. No hosting service is
+required or configured.
+
 ## Workspace capabilities
 
 | Area | Behavior |
 | --- | --- |
-| Overview | Computed counts, configuration posture, severity distribution, and activity summary |
-| Security findings | Configuration and ML findings with method labels, evidence, remediation, and persistent triage |
-| Cloud inventory | Resource search, provider filters, normalized configuration, and applicable check outcomes |
-| Activity analysis | Hourly windows, model scores, missing-data handling, feature evidence, and deviation signals |
-| Model lab | Versioned model metadata, separate data splits, held-out metrics, and retraining from validated JSON |
-| Cloud connections | Opt-in read-only collection using local credentials; coverage and partial failures |
-| Scan history | Immutable configurations, evidence, model version, activity results, and source labels |
-| Reports | JSON exports with rules, ML evidence, provenance, and collection coverage |
+| Overview | Computed configuration posture, severity distribution, and activity summary |
+| Security findings | Distinct rule/ML methods, evidence, remediation guidance, persistent triage |
+| Cloud inventory | Search, provider filters, normalized configuration, applicable check outcomes |
+| Activity analysis | Hourly windows, model scores, missing-data handling, feature evidence |
+| Model lab | Versioned artifacts, separate data splits, held-out metrics; administrator retraining |
+| Cloud connections | Opt-in read-only collection, coverage, and partial failures |
+| Monitoring | Persisted demo/live schedules, enable/pause, manual run, retry backoff, run history |
+| Alert inbox | Deduplicated finding/coverage/failure alerts, acknowledgment, delivery state and retries |
+| Team & access | Administrator account management and audit log; own password changes and sign-out |
+| Scan history & reports | Immutable evidence, provenance, model versions, current triage, JSON exports |
 
-The Phase 2 demo has **18 resources**, **30 configuration checks**, and **330
-normalized events in six hourly windows**. It produces **16 configuration
-findings and three ML anomaly findings**. Configuration posture remains **47%**
-(14 passing checks out of 30). ML findings never alter that configuration score.
+| Permission | Viewer | Analyst | Administrator |
+| --- | --- | --- | --- |
+| Inspect shared scans, alerts, schedules, models; export reports | Yes | Yes | Yes |
+| Scan/import/collect; triage; acknowledge alerts | — | Yes | Yes |
+| Manage accounts/schedules; train models; retry failed email; read audit log | — | — | Yes |
+| Change own password and sign out | Yes | Yes | Yes |
+
+This is one shared workspace. Roles restrict actions; they do not partition cloud
+accounts or resource visibility. Authentication is always required for private
+APIs. The first administrator is created only through the local CLI.
+See [security design](docs/security.md).
+
+The synthetic demo contains **18 resources**, **30 configuration checks**, and
+**330 events in six hourly windows**. It produces **16 configuration findings
+and three ML findings**. Configuration posture is **47%** (14/30 passing checks).
+Repeated demo scans preserve history without repeating the same inbox alerts.
 
 Sources are explicitly labeled `demo`, `import`, or `live`. Missing configuration
-stays unknown. Activity windows with missing features or fewer than five events
-are not scored. Resolving a finding records team triage, not verified remediation.
+stays unknown. Windows with missing features or fewer than five events are not
+scored. Acknowledgment records review; resolving a finding records triage rather
+than verified remediation. No automatic cloud remediation is implemented.
 
 ## Model and evaluation
 
-The model is unsupervised Isolation Forest with 200 trees and a fixed random seed.
-It fits 600 synthetic normal windows, calibrates its decision threshold on 200
-separate normal windows, and evaluates against 480 held-out labeled windows.
-Sample IDs and feature rows cannot overlap between splits. Labels and identifiers
-are never input features.
+The model is **unsupervised Isolation Forest**, with 200 trees and a fixed random
+seed. It fits 600 synthetic normal windows, calibrates the threshold on 200
+separate normal windows, and evaluates on 480 held-out labeled windows. Sample
+IDs and feature rows cannot overlap between splits. Labels/IDs are not features.
 
 | Metric on the synthetic holdout | Isolation Forest | Fixed activity baseline |
 | --- | --- | --- |
@@ -76,97 +114,101 @@ are never input features.
 | False-positive rate | 2.22% | 2.22% |
 | F1 | 37.97% | 64.55% |
 
-This evaluation **does not establish an accuracy improvement or real-world
-performance**. The selected conservative threshold misses 90 of 120 labeled
-anomalies. The model and configuration rules remain complementary review tools;
-the activity comparator above is a separate fixed-threshold method evaluated on
-the same activity labels. Model Lab exposes the misses and false positives.
-
-Use a reviewed local activity dataset before relying on model alerts from live
-accounts. Scores are not probabilities. See [docs/model.md](docs/model.md) and
-the complete [evaluation report](docs/model-evaluation.json).
+These results **do not establish real-world performance or an accuracy
+improvement**. The conservative threshold misses 90 of 120 labeled anomalies;
+the fixed activity comparator has higher recall. Scores are not probabilities.
+Review a local activity dataset before relying on live model alerts. See the
+[model design](docs/model.md) and [evaluation report](docs/model-evaluation.json).
 
 ```bash
 make train-model
-# Train on another reviewed dataset:
-python3 scripts/train_model.py --dataset /path/to/dataset.json
+# Local operator alternative for a reviewed dataset:
+.venv/bin/python scripts/train_model.py --dataset /path/to/dataset.json
 ```
 
-The default model trains automatically on first startup and persists under
-`.runtime/models/`. A new model affects subsequent scans only; past snapshots
-retain their original evidence and model metadata.
+The default model trains on first startup and persists under `.runtime/models/`.
+Retraining affects subsequent scans; historical model evidence stays fixed.
 
 ## Optional cloud collection
 
-Configure read-only access locally, then use **Cloud connections** to collect a
-snapshot. Credentials are never accepted in the dashboard, API, or inventory.
+Configure read-only access locally, then use **Cloud connections**, or create an
+explicit live schedule as an administrator. Startup, demo scans, and status
+checks do not contact cloud accounts. No schedule exists by default.
 
-| Provider | Local authentication | Collection scope |
+| Provider | Authentication | Collection scope |
 | --- | --- | --- |
-| AWS | boto3 profile, environment, SSO, or role credential chain | Regional S3 buckets, security-group ingress, CloudTrail trails/events; global IAM users |
-| Azure | Signed-in Azure CLI; subscription ID | Blob containers, network security groups, Azure Activity Log |
-| GCP | Signed-in gcloud CLI; project ID | Storage buckets/IAM, VPC firewall rules, accessible Cloud Audit Logs |
+| AWS | boto3 profile/environment/SSO/role chain | Regional S3, security groups, CloudTrail; global IAM users |
+| Azure | Local Azure CLI or explicitly mounted token file | Blob containers, network security groups, Activity Log |
+| GCP | Local gcloud CLI or explicitly mounted token file | Storage/IAM, VPC firewall rules, accessible Cloud Audit Logs |
 
-Collectors expose unavailable and unsupported scopes. They do not fully evaluate
-effective IAM, inherited organization controls, all firewall-policy interactions,
-or provider-wide logging coverage. A partial snapshot is not a clean-account
-result. See [docs/cloud-collectors.md](docs/cloud-collectors.md) for permissions,
-mapping semantics, authentication, and limits.
+The default Docker image includes boto3 and REST collectors, but does not include
+Azure/gcloud CLIs. Containers can use administrator-configured read-only token
+file mounts, with expiry managed locally. The browser never accepts cloud
+credentials. [Collector documentation](docs/cloud-collectors.md) describes
+permissions, mappings, and limits. Partial coverage is not a clean-account result.
 
-## Imports and persistence
+## Persistence and operations
 
-Use Cloud inventory → Import inventory for normalized JSON. Configuration-only
-Phase 1 inventories remain compatible. Optional `events` adds activity analysis.
-The examples are [data/demo_inventory.json](data/demo_inventory.json) and
+Normalized JSON imports are limited to 2 MB, 1,000 resources, and 10,000 events.
+Configuration-only Phase 1 inventories remain compatible; optional `events`
+adds activity scoring. See [inventory schema](docs/inventory-schema.md) and
 [data/demo_activity_inventory.json](data/demo_activity_inventory.json).
-The contract is documented in [docs/inventory-schema.md](docs/inventory-schema.md).
+Failed imports/collections preserve the latest valid scan.
 
-Imports are limited to 2 MB, 1,000 resources, and 10,000 events. Failed imports or
-collections preserve the latest valid snapshot. The default database is
-`.runtime/cloudsentinel.db`; `CLOUDSENTINEL_DB` overrides its path. Current triage
-dispositions are joined into historical views while scan evidence stays fixed.
+Default state: `.runtime/cloudsentinel.db` and `.runtime/models/`.
+`CLOUDSENTINEL_DB` changes the database path; the server uses a sibling `models/`
+directory. Runtime files, mounted secrets, backups, and local overrides are
+ignored by Git. Store backups securely: they contain sensitive workspace data
+and password hashes, and are not encrypted.
 
-Keep this local prototype on loopback: it has no multi-user authentication,
-scheduled monitoring, hosted deployment, notifications, or automatic remediation.
-Do not put credentials or unnecessary personal data in snapshots.
+```bash
+.venv/bin/python scripts/backup.py backup backups/cloudsentinel.tar.gz
+# Restore offline into a fresh directory, then launch using that database:
+.venv/bin/python scripts/backup.py restore backups/cloudsentinel.tar.gz \
+  --database .runtime-restored/cloudsentinel.db
+```
+
+Restoring removes sessions, pauses schedules, and suppresses pending email.
+See [operations guide](docs/operations.md) for monitoring, optional SMTP,
+deduplication, session recovery, and backup/restore procedures.
 
 ## Validation
 
 ```bash
 make check
-# With the local application already running:
+# With a server already running:
 make smoke
+.venv/bin/python scripts/smoke_test.py --authenticated
 ```
 
-Tests exercise normalization, leakage prevention, model persistence, inference,
-configuration checks, provider mapping, bounded pagination, API flows, and error
-handling. They use temporary databases, local models, AWS SDK stubs, and mocked
-REST responses. See [docs/validation.md](docs/validation.md) for verified results
-and remaining runtime/visual limits. GitHub Actions runs backend and build checks.
+Tests cover rules, provider mapping, ML leakage/persistence, API authorization,
+CSRF, expiry/revocation, concurrent schedule claims, crash recovery, alert
+persistence/deduplication, mocked SMTP retries, and backup restoration. The
+frontend passes TypeScript and production build checks. GitHub Actions is
+configured for backend/frontend checks and a Docker startup smoke job; hosted
+CI execution is not claimed. New pages still require browser click-through.
 
-## Structure
+## Structure and scope
 
 ```text
-backend/app/           API, models, rules, activity pipeline, ML, SQLite
+backend/app/           FastAPI, auth, scan engine, rules, ML, monitoring, alerts
 backend/app/collectors AWS SDK and Azure/GCP REST adapters
-backend/tests/         Rule, API, model, provider, and persistence tests
-frontend/src/          React dashboard, Activity analysis, Model lab, connections
-data/                  Synthetic configuration and activity fixtures
-data/ml/               Disjoint synthetic training/calibration/evaluation data
-docs/                  Scope, architecture, model, provider contracts, validation
-scripts/               Setup, local servers, training, generation, smoke checks
-.github/workflows/     CI configuration
-AGENTS.md              Project instructions and Phase 2 boundary
+backend/tests/         Detection, access control, operations, and recovery tests
+frontend/src/          React security workspace and sign-in
+data/                 Synthetic configuration/activity fixtures and ML splits
+docs/                 Scope, contracts, design, operations, deployment, evidence
+scripts/               Setup, servers, training, account CLI, backup, smoke checks
+Dockerfile             Multi-stage non-root application image
+compose.yaml           Local deployment with persistent data volume
+AGENTS.md              Project instructions and Phase 3 boundary
 ```
 
-The original abstract is preserved in the root. See
-[Phase 1 scope](docs/phase-1.md), [Phase 2 scope](docs/phase-2.md),
-[architecture](docs/architecture.md), and [configuration rules](docs/rules.md).
+The abstract is preserved in the root. See [Phase 1](docs/phase-1.md),
+[Phase 2](docs/phase-2.md), [Phase 3](docs/phase-3.md),
+[architecture](docs/architecture.md), and [rules](docs/rules.md).
+Distributed scheduling, hosted deployment, full provider policy evaluation,
+automatic remediation, and real-incident model validation remain outside scope.
 
-## Git
-
-The local repository is initialized and its `origin` points to
-`https://github.com/ShashankKumarSaxena/CloudSentinel.git`.
-Phase 2 source changes are ready for review; this implementation session has not
-committed or pushed them. Dependencies, databases, local model artifacts,
-credentials, environment files, and generated builds are ignored.
+The local repository is initialized with origin
+`https://github.com/ShashankKumarSaxena/CloudSentinel.git`. Phase 3 changes remain
+local for review; this session did not commit or push them.

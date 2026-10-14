@@ -1,18 +1,19 @@
 # Project instructions
 
-## Purpose and Phase 2 boundary
+## Purpose and Phase 3 boundary
 Build the AI-Based Automated Multi-Cloud Vulnerability Detector described in
 `Cloud_Vulnerability_Detector_ProblemStatement_Abstract_1.docx`.
 The abstract does not define phases. Phase 1 established normalized inventory,
 configuration checks, SQLite history, triage, and the dashboard. The user has
-authorized Phase 2: read-only cloud collectors, normalized activity, Isolation
-Forest inference, reproducible training and held-out evaluation, and dashboard
-integration. Validate with synthetic data and mocked cloud APIs; no cloud accounts
-are configured. Keep historical Phase 1 behavior compatible.
+authorized Phase 3: persistent monitoring schedules, authenticated shared-workspace
+access, administrator/analyst/viewer roles, alerts, operational audit logs, and
+local Docker deployment. Retain Phase 1/2 configuration and Isolation Forest
+behavior. Validate with synthetic data and mocked cloud APIs; no cloud accounts
+are configured. Do not publish to a hosting service.
 
-Do only Phase 2 unless the user explicitly expands the scope. Continuous
-monitoring, authentication, deployment, alerts, and automatic remediation remain
-future work. Never represent synthetic data as live or synthetic evaluation as
+Do only Phase 3 unless the user explicitly expands the scope. Automatic
+remediation, comprehensive policy evaluation, and real-incident validation remain
+outside scope. Never represent synthetic data as live or synthetic evaluation as
 real-world accuracy. Label rule and ML findings separately.
 
 ## Stack and layout
@@ -24,9 +25,18 @@ real-world accuracy. Label rule and ML findings separately.
 
 ## Working conventions
 - Keep this project local-first. Never collect cloud credentials in the browser.
-- Cloud credentials come only from local provider SDK/CLI credential chains.
+- Cloud credentials come only from local provider SDK/CLI credential chains or
+  explicitly configured local token files mounted read-only into containers.
 - Never load an uploaded pickle/model or expose tokens, raw API responses, or
   provider exception strings. Cloud collectors must not mutate infrastructure.
+- Authentication must be enabled by default. Hash passwords, store only session
+  token hashes, enforce expiry and CSRF, and check roles on the server.
+- Bootstrap the first administrator only through the local CLI, without a
+  default password. Keep credentials and tokens out of logs and Git.
+- Persist schedules, alerts, retries, and audit records. Use one monitoring
+  process per database, recover interrupted work, and never duplicate due jobs.
+- External alert delivery is opt-in through local configuration. Do not send
+  real notifications during implementation; validate with mocked transports.
 - Preserve unknown fields and expose partial coverage and collection errors.
 - Training, calibration, and evaluation samples must be disjoint. Never tune
   thresholds on the evaluation set or include labels/identifiers as ML features.

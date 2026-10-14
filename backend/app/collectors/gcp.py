@@ -2,7 +2,7 @@
 import os
 from urllib.parse import quote, urlencode
 
-from .base import CollectionError, CollectionResult, RestClient, activity_fields, bounds, cli_token, identifier
+from .base import CollectionError, CollectionResult, RestClient, activity_fields, bounds, local_token, identifier
 
 
 def public_bucket(bucket, policy):
@@ -41,7 +41,7 @@ def collect_gcp(request, rest=None):
     if not account:
         raise CollectionError("Set GOOGLE_CLOUD_PROJECT locally or select a project ID before collection.")
     if rest is None:
-        token = cli_token(["gcloud", "auth", "print-access-token"])
+        token = local_token("CLOUDSENTINEL_GCP_TOKEN_FILE", ["gcloud", "auth", "print-access-token"])
         rest = RestClient(token, {"storage.googleapis.com", "compute.googleapis.com", "logging.googleapis.com"})
     result = CollectionResult("gcp", account)
     project = quote(account, safe="")

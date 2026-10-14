@@ -2,7 +2,7 @@
 import os
 from urllib.parse import urlencode
 
-from .base import CollectionError, CollectionResult, RestClient, activity_fields, bounds, cli_token, identifier
+from .base import CollectionError, CollectionResult, RestClient, activity_fields, bounds, local_token, identifier
 
 
 def public_container(account_properties, container_properties):
@@ -39,7 +39,7 @@ def collect_azure(request, rest=None):
     if not account:
         raise CollectionError("Set AZURE_SUBSCRIPTION_ID locally or select a subscription ID before collection.")
     if rest is None:
-        token = cli_token(["az", "account", "get-access-token", "--subscription", account, "--resource", "https://management.azure.com/", "--query", "accessToken", "--output", "tsv"])
+        token = local_token("CLOUDSENTINEL_AZURE_TOKEN_FILE", ["az", "account", "get-access-token", "--subscription", account, "--resource", "https://management.azure.com/", "--query", "accessToken", "--output", "tsv"])
         rest = RestClient(token, {"management.azure.com"})
     result = CollectionResult("azure", account)
     base = f"https://management.azure.com/subscriptions/{account}"

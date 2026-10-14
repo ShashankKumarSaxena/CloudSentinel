@@ -4,6 +4,8 @@ import hashlib
 import json
 import re
 import subprocess
+from pathlib import Path
+import os
 import time
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlparse
@@ -91,6 +93,20 @@ def cli_token(command):
         return token
     except (OSError, subprocess.SubprocessError):
         raise CollectionError("The provider CLI is unavailable or signed out. Configure it locally before collection.") from None
+
+
+def local_token(file_variable, command):
+    filename = os.environ.get(file_variable)
+    if not filename:
+        return cli_token(command)
+    try:
+        with Path(filename).open() as stream:
+            token = stream.read(16385).strip()
+        if not token or len(token) > 16384 or any(c in token for c in "\r\n"):
+            raise ValueError("Invalid token file")
+        return token
+    except (OSError, UnicodeError, ValueError):
+        raise CollectionError("The mounted provider token file is unavailable or invalid. Refresh it locally before collection.") from None
 
 
 class NoRedirect(HTTPRedirectHandler):

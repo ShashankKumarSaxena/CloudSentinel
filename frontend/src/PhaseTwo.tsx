@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Activity, ArrowRight, CheckCircle2, CircleAlert, Cloud, FileJson, FlaskConical, LoaderCircle, RefreshCw, ShieldCheck, Upload } from 'lucide-react';
+import { useAuth } from './Auth';
 import { request } from './api';
 import type { ActivityWindow, Connector, ModelMetrics, ModelStatus, Provider, Scan } from './api';
 import { dateTime, Drawer, EmptyState, ProviderMark, providerNames, providerShort } from './components';
@@ -34,6 +35,7 @@ function EvaluationTable({ model }: { model: ModelStatus }) {
 }
 
 export function ModelLab() {
+  const { canManage } = useAuth();
   const [model, setModel] = useState<ModelStatus | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -51,7 +53,7 @@ export function ModelLab() {
   }
   return <>
     {error && <div className="error-banner" role="alert"><CircleAlert size={18} /><p>{error}</p></div>}
-    <div className="section-intro"><h2>Isolation Forest activity detector</h2><div className="heading-actions"><button className="button secondary small" disabled={busy} onClick={() => upload.current?.click()}><Upload size={14} />Train from dataset</button><button className="button primary small" disabled={busy} onClick={() => void train()}>{busy ? <LoaderCircle className="spinning" size={14} /> : <RefreshCw size={14} />}{busy ? 'Training…' : 'Retrain synthetic model'}</button></div></div>
+    <div className="section-intro"><h2>Isolation Forest activity detector</h2><div className="heading-actions"><button className="button secondary small" disabled={busy || !canManage} onClick={() => upload.current?.click()}><Upload size={14} />Train from dataset</button><button className="button primary small" disabled={busy || !canManage} onClick={() => void train()}>{busy ? <LoaderCircle className="spinning" size={14} /> : <RefreshCw size={14} />}{busy ? 'Training…' : 'Retrain synthetic model'}</button></div></div>
     {!model ? <EmptyState title="Loading model details" detail="Model metadata and evaluation results are stored locally." /> : !model.ready ? <EmptyState title="Model is not ready" detail="Train the synthetic model or upload a reviewed dataset." /> : <>
       <div className="model-summary panel"><div><span className="eyebrow">UNSUPERVISED ANOMALY DETECTION</span><h2>{model.algorithm}</h2><p>{model.id} · {dateTime(model.created_at)}</p></div><span className="subtle-tag">{model.provenance === 'synthetic' ? 'Synthetic training & evaluation' : 'User-labeled dataset'}</span></div>
       <div className="phase-two-metrics">{[['Normal training rows', model.training_samples], ['Normal calibration rows', model.calibration_samples], ['Held-out evaluation rows', model.evaluation_samples], ['Decision threshold', model.threshold.toFixed(3)]].map(([label, value]) => <div className="metric-card" key={label}><span className="metric-note">{label}</span><strong className="metric-value">{value}</strong></div>)}</div>
@@ -65,6 +67,7 @@ export function ModelLab() {
 }
 
 export function CloudConnections({ onCollected }: { onCollected: (scan: Scan) => Promise<void> }) {
+  const { canMutate } = useAuth();
   const [connectors, setConnectors] = useState<Connector[]>([]);
   const [provider, setProvider] = useState<Provider>('aws');
   const [account, setAccount] = useState('');
@@ -85,7 +88,7 @@ export function CloudConnections({ onCollected }: { onCollected: (scan: Scan) =>
   return <>
     <div className="ml-notice"><ShieldCheck size={21} /><div><strong>Read-only collection, started by you</strong><p>Credentials stay in your local provider SDK or CLI. This page accepts account identifiers only. A collection creates a live snapshot and never changes cloud infrastructure.</p></div></div>
     <div className="connection-grid">{connectors.map(c => <button className={`connection-card panel ${provider === c.provider ? 'selected' : ''}`} key={c.provider} onClick={() => { setProvider(c.provider); setAccount(''); setResult(null); }} disabled={busy}><ProviderMark provider={c.provider} /><h3>{providerNames[c.provider]}</h3><span className="subtle-tag">{c.configured ? 'Local configuration detected' : 'Local setup needed'}</span><p>{c.scope}</p><small>{c.credential_source}</small></button>)}</div>
-    <section className="panel collection-form"><h2>Collect a configuration and activity snapshot</h2><p>{connectors.find(c => c.provider === provider)?.requires}</p><form onSubmit={e => { e.preventDefault(); void collect(); }}><label>{provider === 'azure' ? 'Subscription ID' : provider === 'gcp' ? 'Project ID' : 'Expected account ID (optional)'}<input value={account} maxLength={80} pattern="[a-zA-Z0-9-]+" onChange={e => setAccount(e.target.value)} placeholder={provider === 'aws' ? 'Use the active local AWS account' : 'Use form value or local environment variable'} disabled={busy} /></label>{provider === 'aws' && <label>AWS region<input value={region} pattern="[a-z0-9-]+" required onChange={e => setRegion(e.target.value)} disabled={busy} /></label>}<label>Activity lookback<select value={hours} onChange={e => setHours(Number(e.target.value))} disabled={busy}><option value={6}>Last 6 hours</option><option value={24}>Last 24 hours</option><option value={72}>Last 3 days</option><option value={168}>Last 7 days</option></select></label><button className="button primary" disabled={busy || !connectors.length}>{busy ? <LoaderCircle className="spinning" size={16} /> : <Cloud size={16} />}{busy ? 'Collecting…' : `Collect from ${providerShort[provider]}`}</button></form></section>
+    <section className="panel collection-form"><h2>Collect a configuration and activity snapshot</h2><p>{connectors.find(c => c.provider === provider)?.requires}</p><form onSubmit={e => { e.preventDefault(); void collect(); }}><label>{provider === 'azure' ? 'Subscription ID' : provider === 'gcp' ? 'Project ID' : 'Expected account ID (optional)'}<input value={account} maxLength={80} pattern="[a-zA-Z0-9-]+" onChange={e => setAccount(e.target.value)} placeholder={provider === 'aws' ? 'Use the active local AWS account' : 'Use form value or local environment variable'} disabled={busy} /></label>{provider === 'aws' && <label>AWS region<input value={region} pattern="[a-z0-9-]+" required onChange={e => setRegion(e.target.value)} disabled={busy} /></label>}<label>Activity lookback<select value={hours} onChange={e => setHours(Number(e.target.value))} disabled={busy}><option value={6}>Last 6 hours</option><option value={24}>Last 24 hours</option><option value={72}>Last 3 days</option><option value={168}>Last 7 days</option></select></label><button className="button primary" disabled={busy || !connectors.length || !canMutate}>{busy ? <LoaderCircle className="spinning" size={16} /> : <Cloud size={16} />}{busy ? 'Collecting…' : `Collect from ${providerShort[provider]}`}</button></form></section>
     {error && <div className="error-banner" role="alert"><CircleAlert size={19} /><p>{error}</p></div>}
     {result?.collection && <section className="panel phase-two-panel"><div className="panel-heading"><div><h2>Collection coverage</h2><p>{result.collection.partial ? 'Partial collection — review unavailable scopes before interpreting results' : 'Requested scopes collected'} · {result.resources.length} resources</p></div></div><div className="coverage-list">{result.collection.coverage.map((c, i) => <div key={i}><span className={`check-status ${c.status === 'collected' ? 'pass' : 'unknown'}`}>{c.status === 'collected' ? <CheckCircle2 size={16} /> : <CircleAlert size={16} />}{c.status}</span><div><strong>{c.scope}</strong>{c.message && <p>{c.message}</p>}</div></div>)}</div></section>}
     <p className="page-footnote">Collectors are bounded and on demand. An unavailable scope is not safe. Azure/GCP CLI availability and AWS profile detection do not verify permissions. A failed collection preserves the latest valid scan.</p>

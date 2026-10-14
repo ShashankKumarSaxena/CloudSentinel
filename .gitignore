@@ -9,6 +9,7 @@ frontend/dist/
 *.db-shm
 *.db-wal
 .runtime/
+.runtime-*/
 coverage/
 *.joblib
 *.pkl
@@ -21,6 +22,10 @@ coverage/
 .aws/
 .DS_Store
 *.log
+secrets/
+backups/
+compose.local.yaml
+*.monitor.lock
 
 # Editor files
 .idea/

@@ -51,6 +51,7 @@ terminal. The repository has since been initialized with an origin configured.
 ## Proposed later work
 
 Phase 2 has now been implemented; see [docs/phase-2.md](phase-2.md).
+Phase 3 has also been implemented; see [phase-3.md](phase-3.md).
 The following records the original Phase 1 proposal.
 
 Phase 2 should add least-privilege cloud collectors, clearly document mapping

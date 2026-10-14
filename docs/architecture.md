@@ -1,9 +1,10 @@
-# Phase 2 architecture
+# Phase 3 architecture
 
 CloudSentinel is a local React dashboard backed by FastAPI and SQLite. A common
 typed inventory schema lets the same checks evaluate resources across the three
-providers. Phase 2 adds opt-in read-only cloud collection and activity scoring;
-startup and synthetic scans do not make cloud API calls.
+providers. Phase 2 added read-only collection and activity scoring. Phase 3 adds
+required authentication, durable scheduled execution, alerts, and local Docker
+deployment. Startup and synthetic scans do not make cloud API calls.
 
 ```mermaid
 flowchart LR
@@ -22,7 +23,14 @@ flowchart LR
     Q --> T
     Q --> O
     F --> G[(SQLite immutable snapshots)]
-    G --> H[FastAPI API]
+    U[Local accounts and expiring sessions] --> V[Role and CSRF checks]
+    V --> H[FastAPI API]
+    W[Persisted monitor schedules] --> X[Single worker and durable claims]
+    X --> M
+    X --> A
+    F --> Y[(Alert inbox and outbox)]
+    Y --> Z[Opt-in TLS SMTP]
+    G --> H
     H --> I[React security workspace]
     I --> J[JSON report]
     I --> K[Team disposition update]
@@ -80,11 +88,12 @@ historical evidence and scores remain fixed while team review status remains
 current. Repeated scans retain dispositions for identical finding fingerprints.
 
 History lists the latest 100 records. The database retains older snapshots; there
-is no retention cleanup, pagination beyond this list, or scan deletion in Phase 1.
+is no retention cleanup, pagination beyond this list, or scan deletion.
 
 ## API and frontend
 
-API routes are under `/api/v1`. Swagger documentation is available at `/docs`.
+API routes are under `/api/v1`. An offline API reference is available at `/docs` after sign-in on host installs;
+the Docker default disables it.
 Imports read and bound the request stream before validation. Blocking scan and
 SQLite work runs outside the async request loop. Mutations reject unrelated
 browser origins, and the API accepts local hosts only. SQL uses placeholders.
@@ -108,10 +117,42 @@ The interface provides focus states, labeled controls, empty/error messages,
 reduced-motion support, and a responsive menu. Inspection dialogs close with
 Escape, trap keyboard focus, and restore focus to their trigger.
 
-## Operational limits
+## Authentication and operations
 
-The service is intended for one local project team on loopback. There is no
-authentication, authorization, deployment hardening, distributed job queue, or
-continuous monitoring. Scans and collectors are synchronous and bounded.
-Collectors cover supported scopes, not all policy semantics. The synthetic model
-is an experimental baseline; real-world evaluation remains future work.
+`auth.py` stores salted scrypt hashes, hashed opaque sessions, login attempt
+windows, and user roles. The middleware protects private routes and enforces
+CSRF/roles before request handlers. The first administrator is bootstrapped
+locally. UI permissions mirror server permissions. See [security.md](security.md).
+
+`engine.py` centralizes manual and scheduled scan/training operations. The
+process-local mutation lock prevents competing collection or model changes.
+`operations.py` creates scan alerts and audit records in the same transaction as
+snapshot insertion. Schedule/run, alert review, delivery attempt, and account
+records persist in SQLite alongside the existing immutable snapshots.
+
+`monitoring.py` holds an exclusive file lock for one monitoring process per
+database. A background thread claims due schedules transactionally, executes
+bounded collections, records outcome/backoff, and drains optional email work.
+Restart recovery marks unfinished jobs interrupted and releases stale leases.
+Delivery is at-least-once, with bounded retry attempts and stable message IDs.
+See [operations.md](operations.md) for timing/deduplication and retention limits.
+
+The frontend adds sign-in, Monitoring, Alert inbox, and Team & access. Auth/CSRF
+state is kept in memory; the opaque cookie is HttpOnly. Visible dashboard views
+periodically refresh snapshots/operational data. Role changes/password resets
+revoke server sessions and the next private request returns the user to sign-in.
+
+## Deployment and limits
+
+A multi-stage Docker build produces frontend assets and a non-root Python
+runtime. Compose binds loopback, supplies a private persistent data volume,
+read-only root filesystem, temporary scratch space, and a single server worker.
+SMTP and API docs are off in the container defaults. Health/readiness are public
+operational signals, while evidence APIs require authentication.
+See [deployment.md](deployment.md) for setup and pending container verification.
+
+The service remains one local shared workspace. It has no distributed queue,
+tenant isolation, automatic retention/remediation, or hosted deployment. Scans
+and collectors are synchronous and bounded. Supported scopes do not cover all
+policy semantics. The synthetic model remains an experimental baseline;
+real-world evaluation is outside this phase.

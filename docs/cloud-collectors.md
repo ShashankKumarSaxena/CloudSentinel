@@ -1,8 +1,9 @@
 # Read-only cloud collectors
 
-Collection starts only when a user submits Cloud connections. Startup, training,
-demo scans, and status checks do not contact real accounts. Credentials stay in
-local SDK/CLI credential chains. AWS SDK stubs and mocked REST responses validate
+Collection starts when an analyst/administrator submits Cloud connections, or
+when an explicitly configured live schedule runs. Startup, training, demo scans,
+and status checks do not contact real accounts. Credentials stay in local
+SDK/CLI chains or explicitly configured local token file mounts. AWS SDK stubs and mocked REST responses validate
 mapping and failure behavior; no live-account verification is claimed.
 
 ## Authentication and access
@@ -10,8 +11,8 @@ mapping and failure behavior; no live-account verification is claimed.
 | Provider | Local authentication | Implemented reads |
 | --- | --- | --- |
 | AWS | boto3 profile/environment/SSO/role chain | STS identity; regional S3 metadata; security groups; IAM users/MFA; CloudTrail trails/status/history |
-| Azure | Azure CLI Resource Manager token | Storage account/containers; network security groups; Activity Log |
-| GCP | gcloud access token | Bucket list/IAM; firewall list; visible audit-log entries |
+| Azure | Azure CLI Resource Manager token or local token file | Storage account/containers; network security groups; Activity Log |
+| GCP | gcloud access token or local token file | Bucket list/IAM; firewall list; visible audit-log entries |
 
 AWS actions used: `sts:GetCallerIdentity`, `s3:ListAllMyBuckets`,
 `s3:GetBucketLocation`, `s3:GetBucketPublicAccessBlock`,
@@ -33,7 +34,12 @@ types. Private Data Access logs may require additional read access.
 The form accepts identifiers only: expected AWS account and region, Azure
 subscription, or GCP project. Azure/GCP also support `AZURE_SUBSCRIPTION_ID` and
 `GOOGLE_CLOUD_PROJECT`. AWS can verify the expected account through STS.
-The API never accepts access keys, passwords, tokens, or service-account files.
+The collection API never accepts access keys, passwords, tokens, or service-account files.
+Phase 3 login is a separate local workspace account flow. Azure/GCP token file
+settings (`CLOUDSENTINEL_AZURE_TOKEN_FILE`, `CLOUDSENTINEL_GCP_TOKEN_FILE`) are
+server-side only, bounded to 16 KiB and read at collection time. Containers
+do not include provider CLIs. See [deployment.md](deployment.md) for explicit
+read-only mount configuration, permissions, and local expiry management.
 
 ## Mapping limits
 

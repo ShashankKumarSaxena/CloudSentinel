@@ -1,78 +1,70 @@
-# Phase 2 validation evidence
+# Phase 3 validation evidence
 
-The Phase 2 backend, collectors, model pipeline, and dashboard pass automated
-checks. Cloud access was validated with synthetic data and mocked API responses
-as requested; no live-account scan is claimed. Phase 1 behavior remains covered.
+Phase 3 passes the backend suite, TypeScript checks, production frontend build,
+and Docker Compose configuration validation. Detection uses synthetic data and
+mocked cloud APIs. Notification delivery uses mocked SMTP. The user selected
+finishing the deployment package and running Docker later.
 
 ## Verified results
 
 | Check | Result | Evidence |
 | --- | --- | --- |
-| Backend/API/model/provider suite | Passed | 53 tests using temporary SQLite databases, local models, ASGI transport, AWS SDK Stubber, and mocked REST clients |
+| Backend/API/model/provider/security/operations suite | Passed | **94 tests** using temporary SQLite databases, local models, real ASGI routing/middleware, AWS SDK Stubber, mocked REST and SMTP |
 | TypeScript | Passed | `npm --prefix frontend run check` |
-| Production frontend | Passed | `npm --prefix frontend run build` |
-| Synthetic combined scan | Passed | 18 resources; 30 configuration checks; 330 events; six activity windows; 16 rule findings and three ML findings |
-| Model training/evaluation | Passed | 600 fitting rows, 200 calibration rows, 480 holdout rows; persisted model and evaluation report |
-| Configuration compatibility | Passed | Existing rules, missing-field semantics, persistence, and configuration-only import tests |
-| Provider mapping | Passed with mocks | AWS regional storage/security-group/event mapping; Azure container/activity mapping; GCP permission-failure handling |
-| API workflows | Passed | Demo/import, training/retraining, source labels, collection metadata, reports, and failed-operation preservation |
-| Bounded transport | Passed | Repeated page tokens and unexpected credential destinations rejected |
+| Production frontend | Passed | `npm --prefix frontend run build`, v0.3.0 |
+| Compose configuration | Passed | `docker compose config --quiet` |
+| Synthetic combined scan | Passed | 18 resources; 30 checks; 330 events; six windows; 16 rule and three ML findings |
+| Authentication/roles | Passed | Anonymous private access blocked; viewer read-only; analyst scan/triage; administrator management; local-only bootstrap |
+| Session protections | Passed | Salted hashes, hashed tokens, idle/absolute expiry, throttling, bounded sessions, CSRF, cookie flags, logout/revocation |
+| Scheduling | Passed | Concurrent claim race, persisted runs, pause/manual run, busy deferral, backoff, exclusive process lock, shutdown release, interrupted recovery |
+| Alert consistency | Passed | Scan/alert rollback together, repeated fixture deduplication, pagination, acknowledgment persistence, failure episodes |
+| Notification behavior | Passed with mocks | Disabled transport never connects; TLS and stable Message-ID; retry limit/terminal failure/manual retry |
+| Backup and restore | Passed | WAL consolidation, private archive, retained scans/model files/users, excluded sessions, paused schedules, suppressed pending email, no overwrite, unsafe path/checksum rejection |
+| Mounted token handling | Passed with local fake tokens | Explicit file read, bounded/single-line input, safe missing/invalid errors, CLI fallback only when no file configured |
+| Phase 1/2 compatibility | Passed | Original rules, missing-field semantics, legacy snapshots, activity features, model persistence/evaluation and provider mapping remain covered |
 
-The model evaluation is synthetic and reports its limitations: 78.95% precision,
-25% recall, 2.22% false-positive rate, and 90 missed anomalies out of 120. The fixed
-activity comparator has higher recall on this holdout. No real-world advantage
-or accuracy improvement is claimed.
-
-## Meaningful test coverage
-
-- UTC hourly aggregation separates accounts and principals.
-- Missing activity features and tiny windows are not scored.
-- IDs/feature rows cannot leak between train, calibration, and evaluation.
-- Threshold calibration is checked independently of evaluation labels.
-- Model artifacts reload with identical scores; malformed pointers are not loaded.
-- Demo normal windows remain normal; all three unusual windows generate ML findings.
-- Old configuration-only JSON remains valid and missing flags stay unknown.
-- AWS mock responses are validated against the actual SDK service models.
-- CIDR/port pairs remain attached to individual ingress rules.
-- Permission failures produce unknown values and explicit partial coverage.
-- Collection errors do not disclose provider secrets or replace valid snapshots.
-- Status checks do not call cloud APIs or return credentials.
-- Reports and immutable snapshots include the model version and distinct methods.
-- Legacy Phase 1 rows read compatibly without rewriting their stored evidence.
-- Concurrent scan and training requests return 409 while collection is active.
-- Batched scoring preserves individual-window results.
+Model holdout metrics remain synthetic: 78.95% precision, 25% recall, 2.22%
+false-positive rate, and 90 missed anomalies out of 120. The fixed activity
+comparator has higher recall. No real-world performance advantage is claimed.
 
 ## Verification limits
 
-The shell environment previously blocked registry access and localhost sockets.
-The required Python libraries and frontend dependencies were available locally,
-so training, tests, and builds were executed without new registry access. API
-checks use real in-process routing/middleware/persistence rather than live ports.
-
-Automated browser connection tools failed during Phase 1. Its original overview
-was user-confirmed. The new Phase 2 pages have build/type checks but do not yet
-have screenshot, mobile viewport, console, or browser click-through verification.
-No new user display confirmation is assumed.
-
-Azure/gcloud CLIs and cloud accounts are not configured here. Their REST mapping
-and failure behavior were tested with mocks. The real credential chain, provider
-permissions, account-specific coverage, and network behavior need a configured
-account to verify end to end.
-
-Git is now initialized and an origin is configured. Phase 2 changes are left
-for review; this session did not commit, push, deploy, or execute hosted CI.
+- **Docker image build and container startup were not run.** Docker Desktop was stopped; the user explicitly chose to run Docker later. Compose syntax/configuration passed.
+- **New browser pages were not visually verified.** Browser connection tools previously failed. The Phase 1 overview was user-confirmed; no confirmation of Phase 2/3 layouts is assumed. Type checking/building cannot establish browser behavior or mobile layout quality.
+- **Live-port smoke checks were not completed in this session.** Local socket restrictions previously blocked server/browsing tools. The updated script is provided for the user's running server. Automated API flows use in-process ASGI routing, real middleware, persistence, and lifespan initialization.
+- **No live AWS/Azure/GCP account scan.** Cloud mappings, partial failures, bounds, credential destination checks, and token-file behavior are validated with mocks/local fake files. Real permissions/network/credential expiry need a configured account.
+- **No real SMTP delivery.** TLS/transport, outbox state, backoff, and failures are mocked. Sender acceptance, recipient delivery, and operational provider limits remain unverified.
+- **Hosted CI has not executed here.** GitHub Actions includes backend/frontend checks and a Docker startup smoke job. Configuring a job is not evidence that it has passed.
+- Phase 3 changes remain local and uncommitted in this session. No GitHub push, public deployment, or cloud mutation was performed.
 
 ## Manual runtime checklist
 
-- [ ] Install updated requirements and restart the local server.
-- [ ] Run demo scan to create a Phase 2 snapshot while retaining older scans.
-- [ ] Open Activity analysis and inspect normal, anomaly, and feature evidence.
-- [ ] Open Model lab and compare model/comparator metrics and scenario misses.
-- [ ] Retrain the synthetic model and run another scan to see its new version.
-- [ ] Import configuration-only and activity inventories.
-- [ ] Inspect and triage an ML finding; verify its status survives reopening.
-- [ ] Export a report and verify source, method, model, and coverage fields.
-- [ ] Test navigation, dialogs, and filters at a narrow viewport.
-- [ ] Run `make smoke` against the running local server.
+```bash
+make check
+make create-admin
+bash scripts/demo.sh
+# In another terminal:
+make smoke
+.venv/bin/python scripts/smoke_test.py --authenticated
+```
 
-Live collection is optional and must be initiated from a configured local account.
+For Docker use the commands in [deployment.md](deployment.md), with administrator
+bootstrap inside the container.
+
+- [ ] Sign in with the account you created; verify logout and returning to the login screen.
+- [ ] Run a synthetic scan and inspect all 18 resources, 19 findings, and source/method labels.
+- [ ] Inspect Activity analysis and Model lab, including false negatives and comparator metrics.
+- [ ] Create a paused synthetic schedule, run it now, and inspect its successful run/new history entry.
+- [ ] Enable it, wait for its interval, refresh, then pause it; restart the service and confirm schedules/history persist.
+- [ ] Verify repeated demo scans do not duplicate the same finding alerts.
+- [ ] Acknowledge an alert; verify review status survives reopening and does not change finding triage.
+- [ ] Create viewer/analyst accounts; verify viewer inspection and analyst scan/triage controls.
+- [ ] Change a user's role or password and confirm their prior session ends.
+- [ ] Import configuration-only/activity inventories, triage a finding, and export its report.
+- [ ] Review keyboard navigation, focus trapping, filters, sign-in forms, and narrow/mobile layouts.
+- [ ] Start Docker later, verify non-root/read-only startup, bootstrap, readiness, volume persistence, and graceful shutdown.
+- [ ] Back up and restore into a fresh directory; verify paused schedules and renewed sign-in before re-enabling.
+
+Live collection and SMTP verification are optional operator steps that require
+explicit local credentials/configuration. They are not required for the
+synthetic Phase 3 workflow.

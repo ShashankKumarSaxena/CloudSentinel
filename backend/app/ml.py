@@ -42,7 +42,7 @@ def metrics(labels, predicted, scores=None) -> dict:
 class ModelService:
     def __init__(self, directory: Path):
         self.directory = directory
-        self.directory.mkdir(parents=True, exist_ok=True)
+        self.directory.mkdir(parents=True, exist_ok=True, mode=0o700)
         self.lock = threading.RLock()
         self.artifact = None
         pointer = directory / "active.json"
@@ -113,10 +113,12 @@ class ModelService:
             joblib.dump(artifact, temporary)
             digest = hashlib.sha256(temporary.read_bytes()).hexdigest()
             temporary.replace(self.directory / filename)
+            (self.directory / filename).chmod(0o600)
             pointer = {"filename": filename, "sha256": digest, "sklearn_version": sklearn.__version__, "feature_version": FEATURE_VERSION}
             pending = self.directory / f".{model_id}.json"
             pending.write_text(json.dumps(pointer))
             pending.replace(self.directory / "active.json")
+            (self.directory / "active.json").chmod(0o600)
             self.artifact = artifact
         return self.status()
 

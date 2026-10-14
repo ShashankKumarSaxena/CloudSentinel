@@ -18,7 +18,9 @@ def now() -> str:
 class Store:
     def __init__(self, path: Path):
         self.path = path
-        self.path.parent.mkdir(parents=True, exist_ok=True)
+        self.path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+        if self.path.parent.name in ('.runtime', 'cloudsentinel'):
+            self.path.parent.chmod(0o700)
         with self.connection() as conn:
             conn.executescript("""
               PRAGMA journal_mode=WAL;
@@ -34,6 +36,7 @@ class Store:
                 previous_status TEXT NOT NULL, status TEXT NOT NULL, created_at TEXT NOT NULL
               );
             """)
+        self.path.chmod(0o600)
 
     @contextmanager
     def connection(self):
@@ -45,13 +48,13 @@ class Store:
         finally:
             conn.close()
 
-    def scan(self, inventory: Inventory, source: str, model=None, collection=None) -> dict:
+    def scan(self, inventory: Inventory, source: str, model=None, collection=None, phase=None, on_snapshot=None) -> dict:
         import time
         started = time.perf_counter()
         result = scan_resources(inventory.resources)
         for finding in result["findings"]:
             finding["detection_method"] = "rule"
-        result["phase"] = 2 if model is not None else 1
+        result["phase"] = phase or (2 if model is not None else 1)
         result["activity"] = {"event_count": len(inventory.events), "windows": [], "model": None}
         if model is not None:
             windows, anomalies, metadata = model.score(aggregate(inventory.events))
@@ -67,6 +70,8 @@ class Store:
         with self.connection() as conn:
             conn.execute("INSERT INTO scans (id, created_at, source, name, duration_ms, snapshot) VALUES (?, ?, ?, ?, ?, ?)",
                          (scan["id"], scan["created_at"], scan["source"], scan["name"], scan["duration_ms"], json.dumps(result)))
+            if on_snapshot:
+                on_snapshot(conn, scan | result)
         return self.get_scan(scan["id"])
 
     def list_scans(self) -> list[dict]:
