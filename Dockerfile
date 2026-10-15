@@ -5,7 +5,7 @@ RUN npm ci --no-audit --no-fund
 COPY frontend/ ./
 RUN npm run build
 
-FROM python:3.12-slim-bookworm AS runtime-base
+FROM python:3.14-slim-bookworm AS runtime-base
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     CLOUDSENTINEL_DB=/var/lib/cloudsentinel/cloudsentinel.db \
