@@ -5,14 +5,14 @@ RUN npm ci --no-audit --no-fund
 COPY frontend/ ./
 RUN npm run build
 
-FROM python:3.12-slim-bookworm AS runtime
+FROM python:3.12-slim-bookworm AS runtime-base
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     CLOUDSENTINEL_DB=/var/lib/cloudsentinel/cloudsentinel.db \
     CLOUDSENTINEL_ALLOWED_HOSTS=127.0.0.1,localhost \
     CLOUDSENTINEL_MONITORING=1
 WORKDIR /app
-COPY backend/requirements.txt backend/requirements.txt
+COPY backend/requirements*.txt backend/
 RUN python -m pip install --no-cache-dir -r backend/requirements.txt \
     && groupadd --gid 10001 cloudsentinel \
     && useradd --uid 10001 --gid 10001 --create-home cloudsentinel \
@@ -28,4 +28,18 @@ USER 10001:10001
 EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
     CMD python -c "from urllib.request import urlopen; urlopen('http://127.0.0.1:8000/api/v1/health', timeout=3)"
-CMD ["python", "-m", "uvicorn", "backend.app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1", "--timeout-graceful-shutdown", "150"]
+CMD ["python", "-m", "uvicorn", "backend.app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1", "--no-access-log", "--no-server-header", "--limit-concurrency", "64", "--timeout-graceful-shutdown", "150"]
+
+# The small offline image remains a deliberate, separate demonstration target.
+FROM runtime-base AS demo
+ENV CLOUDSENTINEL_MODE=demo
+
+# Production adds workload identity, PostgreSQL, and corporate OIDC dependencies.
+FROM runtime-base AS production
+USER root
+RUN python -m pip install --no-cache-dir -r backend/requirements-production.txt
+USER 10001:10001
+ENV CLOUDSENTINEL_MODE=production \
+    CLOUDSENTINEL_MONITORING=0 \
+    CLOUDSENTINEL_SECURE_COOKIES=1 \
+    CLOUDSENTINEL_DOCS=0

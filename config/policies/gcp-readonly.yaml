@@ -1,0 +1,9 @@
+title: CloudSentinel Configuration Reader
+description: Read supported configuration and visible audit entries; no mutation permissions.
+stage: GA
+includedPermissions:
+  - storage.buckets.list
+  - storage.buckets.get
+  - storage.buckets.getIamPolicy
+  - compute.firewalls.list
+  - logging.logEntries.list

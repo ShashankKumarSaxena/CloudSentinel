@@ -1,5 +1,8 @@
 # Phase 3: monitoring, access, and local deployment
 
+> Historical implementation milestone. For current behavior and deployment, see
+> [README](../README.md), [architecture](architecture.md), and [deployment](deployment.md).
+
 The abstract does not provide phase boundaries. The user authorized Phase 3
 following the foundation and collection/ML phases, and selected a **local Docker
 package and deployment instructions**. No cloud accounts are configured; use

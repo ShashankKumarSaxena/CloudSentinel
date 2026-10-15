@@ -43,7 +43,12 @@ No parameters were tuned against the evaluation labels.
 
 ## JSON training contract
 
-Upload JSON in Model lab or POST to `/api/v1/model/train` (maximum 2 MB).
+In demo mode, administrators can upload JSON in Model lab or POST to
+`/api/v1/model/train` (maximum 2 MB). Production disables API training.
+Train reviewed data offline and install only trusted local artifacts into the
+worker model volume during a maintenance window. Live ML is off by default;
+`CLOUDSENTINEL_LIVE_ML_ENABLED=1` requires a ready artifact with `user_labeled`
+provenance. This field is an operator assertion, not a quality certification.
 The CLI is `python3 scripts/train_model.py --dataset /path/to/dataset.json`.
 Serialized models and executable pickle uploads are not accepted.
 
@@ -90,7 +95,10 @@ splits. The application does not label real incidents for you.
 Application-generated joblib artifacts live in `.runtime/models/`, outside Git.
 Metadata records model ID, feature/runtime versions, dataset hash, parameters,
 threshold, and evaluation. Atomic replacement publishes completed artifacts.
-Checksum or runtime-version mismatch causes default retraining on startup.
+In demo mode, a missing/incompatible artifact is replaced by the bundled default
+on startup. Production never automatically trains a synthetic fallback; invalid
+artifacts prevent ML-enabled startup. With live ML disabled, configuration checks
+remain available without loading a model.
 Invalid training input never replaces the active model. Do not manually place
 untrusted joblib files in the local model directory.
 

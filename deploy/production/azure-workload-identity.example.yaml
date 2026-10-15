@@ -1,0 +1,6 @@
+services:
+  worker:
+    environment:
+      AZURE_FEDERATED_TOKEN_FILE: /run/workload/azure/token
+    volumes:
+      - ${CLOUDSENTINEL_AZURE_IDENTITY_DIRECTORY:?Set the externally managed token directory}:/run/workload/azure:ro

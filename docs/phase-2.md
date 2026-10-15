@@ -1,5 +1,8 @@
 # Phase 2 cloud collection and anomaly detection
 
+> Historical implementation milestone. For current behavior and deployment, see
+> [README](../README.md), [architecture](architecture.md), and [deployment](deployment.md).
+
 Phase 2 extends the configuration prototype with provider collection and a real
 unsupervised activity model. The user authorized this phase and selected
 synthetic and mocked validation because no cloud accounts are configured.

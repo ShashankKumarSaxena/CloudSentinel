@@ -1,12 +1,15 @@
 services:
   cloudsentinel:
-    build: .
-    image: cloudsentinel:0.3.0
+    build:
+      context: .
+      target: demo
+    image: cloudsentinel:1.0.0-demo
     init: true
     restart: unless-stopped
     ports:
       - "127.0.0.1:${CLOUDSENTINEL_PORT:-8000}:8000"
     environment:
+      CLOUDSENTINEL_MODE: demo
       CLOUDSENTINEL_DB: /var/lib/cloudsentinel/cloudsentinel.db
       CLOUDSENTINEL_ALLOWED_HOSTS: 127.0.0.1,localhost
       CLOUDSENTINEL_MONITORING: "1"

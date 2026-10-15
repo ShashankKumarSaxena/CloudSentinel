@@ -1,0 +1,6 @@
+services:
+  worker:
+    environment:
+      GOOGLE_APPLICATION_CREDENTIALS: /run/workload/google/credentials.json
+    volumes:
+      - ${CLOUDSENTINEL_GCP_IDENTITY_DIRECTORY:?Set the workload federation configuration directory}:/run/workload/google:ro

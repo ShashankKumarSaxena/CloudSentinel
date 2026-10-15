@@ -1,158 +1,76 @@
-# Phase 3 architecture
+# Architecture
 
-CloudSentinel is a local React dashboard backed by FastAPI and SQLite. A common
-typed inventory schema lets the same checks evaluate resources across the three
-providers. Phase 2 added read-only collection and activity scoring. Phase 3 adds
-required authentication, durable scheduled execution, alerts, and local Docker
-deployment. Startup and synthetic scans do not make cloud API calls.
+CloudSentinel is a self-hosted, single-organization application. Demo and
+production share detection code while using separate startup policies and state.
 
 ```mermaid
 flowchart LR
-    A[Synthetic inventory JSON] --> C[Pydantic inventory validation]
-    B[User imported JSON snapshot] --> C
-    M[Opt-in AWS Azure GCP collectors] --> C
-    C --> D[Provider neutral resource records]
-    D --> E[Six configuration baseline rules]
-    E --> F[Findings and check outcomes]
-    D --> N[Hourly activity aggregation]
-    N --> O[Isolation Forest inference]
-    O --> F
-    P[Normal training data] --> Q[Model training]
-    R[Normal calibration data] --> Q
-    S[Held-out labeled data] --> T[Model evaluation]
-    Q --> T
-    Q --> O
-    F --> G[(SQLite immutable snapshots)]
-    U[Local accounts and expiring sessions] --> V[Role and CSRF checks]
-    V --> H[FastAPI API]
-    W[Persisted monitor schedules] --> X[Single worker and durable claims]
-    X --> M
-    X --> A
-    F --> Y[(Alert inbox and outbox)]
-    Y --> Z[Opt-in TLS SMTP]
-    G --> H
-    H --> I[React security workspace]
-    I --> J[JSON report]
-    I --> K[Team disposition update]
-    K --> L[(SQLite triage audit trail)]
-    L --> H
+    Browser -->|HTTPS| Proxy[Caddy]
+    Proxy --> API[FastAPI API]
+    API --> DB[(PostgreSQL)]
+    Worker[Dedicated worker] --> DB
+    Worker --> Registry[Approved account registry]
+    Worker -->|Read-only workload identity| Clouds[AWS / Azure / GCP]
+    Worker --> Models[Trusted local model volume]
+    Worker -->|Opt-in TLS| SMTP[SMTP relay]
+    API -. Optional OIDC .-> IdP[Corporate identity provider]
 ```
 
-## Data contracts
+## Code boundaries
 
-`backend/app/models.py` defines providers, configuration, inventory, events,
-training data, and triage status. Inventory contains 1–1,000 resources with unique
-IDs within each provider. Imports reject unknown keys, invalid CIDRs or ports,
-string booleans, malformed JSON, and unsupported schema versions.
+`application.py` composes dependencies and lifecycle; `main.py` exposes the ASGI
+entry point. HTTP routes translate requests into service calls. The shared
+permissions policy drives both middleware checks and generated API role metadata.
+Response contracts exclude internal session hashes and provider credentials.
+`core` contains deployment settings without importing HTTP concerns.
 
-Configuration evidence represents normalized assertions, not full policy
-evaluation. Collectors map supported settings conservatively and expose partial
-coverage. Unknown fields remain unknown. No credential input is accepted.
+`domain` owns validated inventories, approved account metadata, deterministic
+rules, and activity aggregation. `services` orchestrates authentication,
+collections, model evaluation, monitoring, alerts, and retention. Repositories
+persist immutable evidence and separate mutable dispositions. Infrastructure
+provides database connections, versioned SQL migrations, cloud SDK/REST adapters,
+credential factories, archives, and SMTP delivery.
 
-## Rule evaluation
+The frontend groups screens by feature. Shared API types and transport are
+separate from reusable UI components. The application shell owns navigation and
+selected snapshot scope. Account snapshot pointers prevent the newest scan of
+one account from becoming the apparent state of every account.
 
-`backend/app/rules.py` evaluates only rules applicable to a resource's type.
-An outcome is pass, fail, or unknown. Required missing fields yield unknown.
-The exception is the MFA check for an explicitly non-admin identity: it passes
-because the privileged-human rule is not violated.
+## Collection transaction
 
-Failed checks generate findings with a stable SHA-256-derived identifier from
-provider, resource ID, and rule ID. Findings contain severity, category, affected
-resource, evidence, and remediation. The severity is a project-defined baseline,
-not CVSS or a vendor compliance score.
+1. An analyst submits an approved connection/region with an Idempotency-Key.
+2. The API validates scope and durably queues the request, returning HTTP 202.
+3. The singleton worker claims it and rechecks approval before requesting credentials.
+4. Collectors normalize bounded read-only responses, retaining coverage gaps.
+5. Rules and optional reviewed ML run. Snapshot, account pointer, alerts, and scan
+   audit commit together. Failure preserves the previous valid pointer.
+6. The job records success/failure; users inspect its result without holding an
+   HTTP request open for cloud collection.
 
-Posture is `round(passed / (passed + failed) × 100)`. It is null if all checks are
-unknown. Coverage, passed/failed counts, and unknown counts remain visible.
+Short claim/admin transactions serialize using SQLite immediate transactions or
+PostgreSQL transaction advisory locks. A separate database session advisory lock
+allows one production worker. A persisted owner token fences obsolete workers
+from publishing snapshots or finishing runs after ownership changes. A worker
+watchdog exits a stuck process so container restart can recover interrupted jobs.
+Execution is at least once: a crash after snapshot commit can leave an extra
+historical snapshot on retry. Alert fingerprints suppress repeat observations.
 
-## Persistence
+## Storage and scaling contract
 
-`backend/app/activity.py` aggregates events by provider/account/principal/UTC hour.
-`backend/app/ml.py` trains normal-only Isolation Forest models, calibrates a
-threshold independently, and scores complete windows with at least five events.
-Activity anomalies produce medium-severity review findings; they do not change
-the configuration posture score. Model metadata and scores are saved in snapshots.
+Production requires PostgreSQL; demo uses private SQLite/WAL. SQL parameters
+remain bound and migrations are backend-specific, ordered, and transactional.
+A connection pool bounds PostgreSQL connections. History reads indexed summary
+metadata instead of loading full evidence for each row. Jobs and alerts expose
+bounded pagination; run/audit views show recent records while retaining history.
 
-Versioned artifacts live under `.runtime/models/`. A completed model and its
-pointer are published atomically. Model metadata includes feature/runtime
-versions, dataset hash, parameters, threshold, provenance, and held-out metrics.
-The upload contract is JSON data only; executable models cannot be uploaded.
+The supplied deployment runs **one API process and one worker replica**. It is
+not a distributed scheduler or high-availability topology. Collection bounds are
+1,000 resources, 10,000 events, and 30 listing pages. For larger estates, approve
+smaller supported scopes or extend collectors and validate capacity first.
 
-`backend/app/store.py` saves the resource configurations, checks, findings, and
-summary together in a SQLite transaction. The default database is under
-`.runtime/` and excluded from Git. WAL mode and a connection timeout support
-concurrent local reads and short writes.
+Model files are trusted operator-controlled joblib artifacts, never uploads.
+The worker can write its model volume; the API mounts it read-only. Production
+ML is disabled unless explicitly enabled with a reviewed non-synthetic artifact.
 
-Scan snapshots are immutable. Separate tables store finding dispositions and
-triage events. Current dispositions are joined into historical responses, so
-historical evidence and scores remain fixed while team review status remains
-current. Repeated scans retain dispositions for identical finding fingerprints.
-
-History lists the latest 100 records. The database retains older snapshots; there
-is no retention cleanup, pagination beyond this list, or scan deletion.
-
-## API and frontend
-
-API routes are under `/api/v1`. An offline API reference is available at `/docs` after sign-in on host installs;
-the Docker default disables it.
-Imports read and bound the request stream before validation. Blocking scan and
-SQLite work runs outside the async request loop. Mutations reject unrelated
-browser origins, and the API accepts local hosts only. SQL uses placeholders.
-Collection, scan, and training operations share a process-local mutation lock.
-Failed imports, failed collection, and invalid training preserve valid state.
-
-`/model` exposes metadata; `/model/train` accepts validated independent splits.
-`/connectors` reports local configuration hints without making cloud API calls.
-`/scans/collect` initiates the selected provider collector. All data includes
-`demo`, `import`, or `live` provenance; the model has separate training provenance.
-
-Activity analysis, Model lab, and Cloud connections extend the existing dashboard.
-Historical Phase 1 snapshots are read compatibly without rewriting their evidence.
-
-Vite proxies local development requests to port 8000. For local use,
-`scripts/demo.sh` builds the frontend first, then FastAPI serves `frontend/dist/`
-and the API on the same local origin. Navigation stays within the React app,
-so there is no client-side URL routing or fallback dependency.
-
-The interface provides focus states, labeled controls, empty/error messages,
-reduced-motion support, and a responsive menu. Inspection dialogs close with
-Escape, trap keyboard focus, and restore focus to their trigger.
-
-## Authentication and operations
-
-`auth.py` stores salted scrypt hashes, hashed opaque sessions, login attempt
-windows, and user roles. The middleware protects private routes and enforces
-CSRF/roles before request handlers. The first administrator is bootstrapped
-locally. UI permissions mirror server permissions. See [security.md](security.md).
-
-`engine.py` centralizes manual and scheduled scan/training operations. The
-process-local mutation lock prevents competing collection or model changes.
-`operations.py` creates scan alerts and audit records in the same transaction as
-snapshot insertion. Schedule/run, alert review, delivery attempt, and account
-records persist in SQLite alongside the existing immutable snapshots.
-
-`monitoring.py` holds an exclusive file lock for one monitoring process per
-database. A background thread claims due schedules transactionally, executes
-bounded collections, records outcome/backoff, and drains optional email work.
-Restart recovery marks unfinished jobs interrupted and releases stale leases.
-Delivery is at-least-once, with bounded retry attempts and stable message IDs.
-See [operations.md](operations.md) for timing/deduplication and retention limits.
-
-The frontend adds sign-in, Monitoring, Alert inbox, and Team & access. Auth/CSRF
-state is kept in memory; the opaque cookie is HttpOnly. Visible dashboard views
-periodically refresh snapshots/operational data. Role changes/password resets
-revoke server sessions and the next private request returns the user to sign-in.
-
-## Deployment and limits
-
-A multi-stage Docker build produces frontend assets and a non-root Python
-runtime. Compose binds loopback, supplies a private persistent data volume,
-read-only root filesystem, temporary scratch space, and a single server worker.
-SMTP and API docs are off in the container defaults. Health/readiness are public
-operational signals, while evidence APIs require authentication.
-See [deployment.md](deployment.md) for setup and pending container verification.
-
-The service remains one local shared workspace. It has no distributed queue,
-tenant isolation, automatic retention/remediation, or hosted deployment. Scans
-and collectors are synchronous and bounded. Supported scopes do not cover all
-policy semantics. The synthetic model remains an experimental baseline;
-real-world evaluation is outside this phase.
+See [security](security.md), [operations](operations.md), and
+[deployment](deployment.md) for trust boundaries and operating procedures.

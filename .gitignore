@@ -30,3 +30,8 @@ compose.local.yaml
 # Editor files
 .idea/
 .vscode/
+
+# Operator-owned deployment configuration and generated evidence
+config/accounts.local.json
+artifacts/
+*.dump

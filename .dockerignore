@@ -27,3 +27,9 @@ compose.local.yaml
 docs
 backend/tests
 .DS_Store
+
+**/.env
+**/.env.*
+config/accounts.local.json
+artifacts
+*.dump

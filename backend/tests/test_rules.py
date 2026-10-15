@@ -1,37 +1,66 @@
 import copy
-import json
 from pathlib import Path
+import json
 import unittest
 
 from pydantic import ValidationError
 
-from backend.app.models import Inventory, Resource
-from backend.app.rules import scan_resources
+from backend.app.domain.rules import scan_resources
+from backend.app.domain.schemas import Inventory, Resource
 
 ROOT = Path(__file__).resolve().parents[2]
 
 
 def resource(kind, config, **kwargs):
-    return Resource.model_validate({"id": "test-resource", "name": "Test resource", "provider": "aws",
-                                    "type": kind, "region": "test-region", "account": "test-account",
-                                    "config": config, **kwargs})
+    return Resource.model_validate(
+        {
+            "id": "test-resource",
+            "name": "Test resource",
+            "provider": "aws",
+            "type": kind,
+            "region": "test-region",
+            "account": "test-account",
+            "config": config,
+            **kwargs,
+        }
+    )
 
 
 class RulesTest(unittest.TestCase):
     def test_demo_baseline_is_reproducible(self):
         inventory = Inventory.model_validate_json((ROOT / "data/demo_inventory.json").read_text())
         result = scan_resources(inventory.resources)
-        self.assertEqual(result["summary"], {"resources": 18, "total_checks": 30, "passed": 14,
-                                              "failed": 16, "unknown": 0, "posture_score": 47})
-        self.assertEqual({s: sum(f["severity"] == s for f in result["findings"]) for s in ("critical", "high", "medium")},
-                         {"critical": 3, "high": 8, "medium": 5})
+        self.assertEqual(
+            result["summary"],
+            {
+                "resources": 18,
+                "total_checks": 30,
+                "passed": 14,
+                "failed": 16,
+                "unknown": 0,
+                "posture_score": 47,
+            },
+        )
+        self.assertEqual(
+            {
+                s: sum(f["severity"] == s for f in result["findings"])
+                for s in ("critical", "high", "medium")
+            },
+            {"critical": 3, "high": 8, "medium": 5},
+        )
         self.assertEqual({f["provider"] for f in result["findings"]}, {"aws", "azure", "gcp"})
 
     def test_secure_inventory_has_no_findings(self):
-        assets = [resource("storage", {"public_access": False, "encrypted": True}),
-                  resource("identity", {"permissions": ["storage:read"], "admin": True, "mfa_enabled": True}, id="admin"),
-                  resource("firewall", {"ingress_cidrs": ["10.0.0.0/8"], "ports": [22]}, id="network"),
-                  resource("audit", {"logging_enabled": True}, id="logs")]
+        assets = [
+            resource("storage", {"public_access": False, "encrypted": True}),
+            resource(
+                "identity",
+                {"permissions": ["storage:read"], "admin": True, "mfa_enabled": True},
+                id="admin",
+            ),
+            resource("firewall", {"ingress_cidrs": ["10.0.0.0/8"], "ports": [22]}, id="network"),
+            resource("audit", {"logging_enabled": True}, id="logs"),
+        ]
         result = scan_resources(assets)
         self.assertEqual(result["findings"], [])
         self.assertEqual(result["summary"]["posture_score"], 100)
@@ -49,7 +78,9 @@ class RulesTest(unittest.TestCase):
         self.assertEqual(result["summary"]["unknown"], 1)
 
     def test_non_privileged_workload_does_not_require_mfa(self):
-        result = scan_resources([resource("identity", {"admin": False, "permissions": ["storage:read"]})])
+        result = scan_resources(
+            [resource("identity", {"admin": False, "permissions": ["storage:read"]})]
+        )
         self.assertEqual(result["summary"]["unknown"], 0)
         self.assertEqual(result["findings"], [])
 
@@ -58,15 +89,22 @@ class RulesTest(unittest.TestCase):
         self.assertEqual(result["findings"][0]["rule_id"], "NET-001")
 
     def test_public_https_is_not_a_management_port_issue(self):
-        result = scan_resources([resource("firewall", {"ingress_cidrs": ["0.0.0.0/0"], "ports": [443]})])
+        result = scan_resources(
+            [resource("firewall", {"ingress_cidrs": ["0.0.0.0/0"], "ports": [443]})]
+        )
         self.assertEqual(result["findings"], [])
 
     def test_permission_wildcard_is_detected(self):
-        result = scan_resources([resource("identity", {"admin": False, "permissions": ["storage:*"]})])
+        result = scan_resources(
+            [resource("identity", {"admin": False, "permissions": ["storage:*"]})]
+        )
         self.assertEqual(result["findings"][0]["rule_id"], "IAM-001")
 
     def test_findings_are_stable_across_scans_and_unique_across_providers(self):
-        assets = [resource("storage", {"public_access": True, "encrypted": True}, provider=p) for p in ("aws", "azure", "gcp")]
+        assets = [
+            resource("storage", {"public_access": True, "encrypted": True}, provider=p)
+            for p in ("aws", "azure", "gcp")
+        ]
         first, second = scan_resources(assets), scan_resources(assets)
         self.assertEqual(first, second)
         self.assertEqual(len({f["id"] for f in first["findings"]}), 3)

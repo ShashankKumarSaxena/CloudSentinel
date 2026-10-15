@@ -1,0 +1,10 @@
+-r requirements.txt
+# Provider-supported short-lived workload credentials.
+azure-identity==1.26.0
+google-auth[requests]==2.62.0
+# Optional corporate OIDC login, verified by Authlib.
+Authlib==1.9.1
+httpx==0.28.1
+itsdangerous==2.2.0
+# PostgreSQL deployment; demo mode continues to use stdlib SQLite.
+psycopg[binary,pool]==3.3.6

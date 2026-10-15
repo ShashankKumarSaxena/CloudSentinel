@@ -1,0 +1,135 @@
+name: cloudsentinel-production
+
+x-runtime: &runtime
+  build:
+    context: ../..
+    target: production
+  image: cloudsentinel:1.0.0-production
+  init: true
+  restart: unless-stopped
+  read_only: true
+  tmpfs:
+    - /tmp:rw,noexec,nosuid,size=67108864
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+  pids_limit: 128
+  mem_limit: 2g
+  stop_grace_period: 180s
+  environment: &environment
+    CLOUDSENTINEL_MODE: production
+    CLOUDSENTINEL_PUBLIC_URL: https://${CLOUDSENTINEL_DOMAIN:-security.example.com}
+    CLOUDSENTINEL_ALLOWED_HOSTS: ${CLOUDSENTINEL_DOMAIN:-security.example.com},127.0.0.1
+    CLOUDSENTINEL_DB: /var/lib/cloudsentinel/workspace.db
+    CLOUDSENTINEL_MODEL_DIR: /var/lib/cloudsentinel/models
+    CLOUDSENTINEL_DATABASE_URL_FILE: /run/secrets/database_url
+    CLOUDSENTINEL_ACCOUNTS_FILE: /config/accounts.json
+    CLOUDSENTINEL_SECURE_COOKIES: '1'
+    CLOUDSENTINEL_MONITORING: '0'
+    CLOUDSENTINEL_DOCS: '0'
+    CLOUDSENTINEL_LIVE_ML_ENABLED: '0'
+    CLOUDSENTINEL_SMTP_ENABLED: '0'
+    FORWARDED_ALLOW_IPS: ${CLOUDSENTINEL_PROXY_IP:-172.30.80.10}
+    OPENBLAS_NUM_THREADS: '1'
+    OMP_NUM_THREADS: '1'
+  secrets:
+    - database_url
+    - source: database_ca
+      target: database_ca.crt
+  networks: [application]
+
+services:
+  database:
+    image: postgres:17-bookworm
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: cloudsentinel_owner
+      POSTGRES_DB: cloudsentinel
+      POSTGRES_PASSWORD_FILE: /run/secrets/database_admin_password
+      POSTGRES_INITDB_ARGS: --auth-host=scram-sha-256
+    entrypoint: [sh, /config/database-entrypoint.sh]
+    volumes:
+      - database-data:/var/lib/postgresql/data
+      - database-tls:/var/lib/postgresql/tls
+      - ./database-entrypoint.sh:/config/database-entrypoint.sh:ro
+      - ./init-database.sh:/docker-entrypoint-initdb.d/10-cloudsentinel.sh:ro
+      - ./pg_hba.conf:/etc/postgresql/cloudsentinel_hba.conf:ro
+    secrets:
+      - database_password
+      - database_admin_password
+      - source: database_certificate
+        target: database.crt
+      - source: database_key
+        target: database.key
+    healthcheck:
+      test: [CMD-SHELL, pg_isready -U cloudsentinel_owner -d cloudsentinel]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks: [application]
+
+  worker:
+    <<: *runtime
+    command: [python, -m, backend.app.worker]
+    networks: [application, cloud-egress]
+    volumes:
+      - model-data:/var/lib/cloudsentinel
+      - ../../config/accounts.local.json:/config/accounts.json:ro
+    depends_on:
+      database: {condition: service_healthy}
+    healthcheck:
+      test: [CMD, python, -m, backend.app.healthcheck, worker]
+      interval: 30s
+      timeout: 8s
+      start_period: 60s
+      retries: 3
+
+  api:
+    <<: *runtime
+    volumes:
+      - model-data:/var/lib/cloudsentinel:ro
+      - ../../config/accounts.local.json:/config/accounts.json:ro
+    depends_on:
+      database: {condition: service_healthy}
+      worker: {condition: service_healthy}
+    command: [python, -m, uvicorn, backend.app.main:app, --host, 0.0.0.0, --port, '8000', --workers, '1', --no-access-log, --no-server-header, --limit-concurrency, '64', --timeout-graceful-shutdown, '150']
+
+  proxy:
+    image: caddy:2.10-alpine
+    restart: unless-stopped
+    ports: ['80:80', '443:443']
+    environment:
+      CLOUDSENTINEL_DOMAIN: ${CLOUDSENTINEL_DOMAIN:-security.example.com}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - proxy-data:/data
+      - proxy-config:/config
+    depends_on:
+      api: {condition: service_healthy}
+    networks:
+      application:
+        ipv4_address: ${CLOUDSENTINEL_PROXY_IP:-172.30.80.10}
+      public-egress:
+
+secrets:
+  database_url: {file: ../../secrets/production/database_url}
+  database_password: {file: ../../secrets/production/database_password}
+  database_admin_password: {file: ../../secrets/production/database_admin_password}
+  database_ca: {file: ../../secrets/production/database_ca.crt}
+  database_certificate: {file: ../../secrets/production/database.crt}
+  database_key: {file: ../../secrets/production/database.key}
+
+volumes:
+  database-data:
+  database-tls:
+  model-data:
+  proxy-data:
+  proxy-config:
+
+networks:
+  cloud-egress:
+  public-egress:
+  application:
+    internal: true
+    ipam:
+      config:
+        - subnet: ${CLOUDSENTINEL_SUBNET:-172.30.80.0/24}

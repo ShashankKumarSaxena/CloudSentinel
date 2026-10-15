@@ -1,97 +1,91 @@
-# Access and security design
+# Security design
 
-Phase 3 provides local accounts for one shared workspace. Authentication is
-required for private APIs, API schema/docs, and data exports. Static frontend
-files and public liveness/readiness/setup/login routes remain accessible so a
-user can sign in. No switch disables authentication.
+## Organization and access
 
-## Accounts and passwords
+CloudSentinel supports one organization with shared cloud evidence. Viewer,
+analyst, and administrator permissions are enforced by server middleware.
+There is no tenant or account-level visibility isolation.
 
-The first administrator is created through `scripts/manage_users.py create-admin`
-with an interactive password prompt. There are no default credentials or public
-bootstrap API. Administrators create additional accounts through Team & access.
-Passwords must contain 12–256 characters. Usernames are case-insensitive and
-unique. The last enabled administrator cannot be disabled or demoted.
-
-Passwords use a random 16-byte salt and stdlib scrypt with N=2^15, r=8, p=3.
-Hashes remain on the server and never appear in user responses. These parameters
-are among the supported combinations in the
-[OWASP Password Storage guidance](https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html).
-Unknown users undergo a dummy password check. Invalid credentials use a generic
-error. Five failures per client/username in a 15-minute window block further
-attempts for that window. Password checks for login are serialized to bound
-memory use. This local throttle is not a distributed perimeter protection system.
-
-Password changes require the current password and revoke all account sessions.
-Role/access changes also revoke sessions. Local CLI password recovery is an
-operator capability for someone who already controls the machine/data directory.
-Disabling an account preserves its history.
-
-## Sessions and browser protections
-
-Sessions use random opaque 32-byte tokens; SQLite stores only their SHA-256
-hashes. Cookies are HttpOnly and SameSite=Strict, scoped to the workspace origin.
-Sessions expire after eight hours or 30 minutes without authenticated API
-requests. Visible dashboard polling counts as activity; this is not a keyboard
-inactivity timer. At most five sessions remain active per account.
-Logout revokes the selected session server-side. Client CSRF state stays in
-memory and is not stored in localStorage.
-
-Private write requests require the separate session CSRF token in the
-`X-CSRF-Token` header. Browser-origin checks reject unrelated origins on writes,
-including login. The host dev workflow permits the local Vite origin. Explicit
-allowed hosts prevent arbitrary Host headers. Responses include no-sniff,
-frame-denial, same-origin referrer policy, and a self-origin CSP; API responses
-use no-store. Inline styles remain permitted for existing computed visuals;
-inline scripts are not permitted by the production API CSP.
-
-The supplied loopback HTTP deployment uses `CLOUDSENTINEL_SECURE_COOKIES=0`.
-HTTPS deployments require secure cookies (`1`), which also enables HSTS.
-See the [OWASP Session Management guidance](https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html)
-and [CSRF Prevention guidance](https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html)
-for the principles behind these controls.
-
-## Permissions
-
-| Operation | Viewer | Analyst | Administrator |
+| Operation | Viewer | Analyst | Admin |
 | --- | --- | --- | --- |
-| Inspect workspace data, schedules, alerts; export reports | Yes | Yes | Yes |
-| Run/import/collect scans; triage findings; acknowledge alerts | — | Yes | Yes |
-| Manage users/schedules; run schedules manually; train models; retry email; read audit | — | — | Yes |
-| Change own password; sign out | Yes | Yes | Yes |
+| Read scans, coverage, jobs, alerts, schedules, models; export reports | Yes | Yes | Yes |
+| Import/collect; cancel pending jobs; triage; acknowledge alerts | — | Yes | Yes |
+| Manage users/schedules, read audit, retry email | — | — | Yes |
+| Train models through the API, in demo mode | — | — | Yes |
+| Change own local password; sign out | Yes | Yes | Yes |
 
-The API enforces permissions independently of hidden/disabled UI controls.
-Accounts share resource visibility. There is no tenant isolation, account-level
-permission partition, SSO, or multifactor authentication in this phase.
+The first administrator is created only through the interactive local CLI.
+There are no default credentials or unauthenticated bootstrap routes. The last
+enabled administrator and last local recovery administrator cannot be removed.
 
-## Data and secrets
+Local passwords require 12–256 characters and use scrypt (N=2^15, r=8, p=3), a
+random 16-byte salt, and serialized hashing to bound memory pressure. Unknown
+users receive a dummy hash check. Five failed client/username attempts within
+15 minutes block further attempts for that window. Put an appropriate access
+boundary/rate limiter in front of an exposed installation.
 
-Cloud credentials are accepted only through local provider SDK/CLI chains or
-explicit server-side token file settings. Collection forms contain identifiers
-and scope, never tokens or access keys. Token files have a 16 KiB bound and
-reject empty/multiline content. REST adapters restrict destinations to known
-HTTPS provider hosts and reject redirects/pagination to unrelated destinations.
-Provider exception strings, raw credential responses, and passwords are not
-returned through the API or audit log.
+Optional OIDC delegates corporate authentication and MFA to the configured IdP.
+Authlib validates the authorization-code/PKCE flow and signed identity token.
+Only an explicitly approved **issuer + subject** maps to a local enabled user;
+email addresses and identity-provider role claims cannot auto-provision access.
+Local roles remain authoritative. Identity linking revokes existing sessions and
+turns that user into SSO-only access. Keep a separate local recovery administrator.
 
-SQLite uses parameterized SQL, bounded validated imports, short write
-transactions, and immutable scan evidence. Default runtime directories are
-private, the database is mode 600, and generated model artifacts are mode 600.
-External SMTP is opt-in with reviewed recipients and TLS. SMTP passwords come
-from private files. Credentials and runtime files are excluded from Git and
-Docker build context. Container mounts must be configured explicitly.
+## Sessions and browser boundary
 
-Model artifacts use trusted local joblib files. Uploaded data is validated JSON,
-not executable model files. A checksum in a backup detects damage; it does not
-make an untrusted archive safe. Backups include password hashes/cloud evidence
-and need private storage or external encryption. Restore your own trusted backups.
+Opaque random 32-byte session tokens live in HttpOnly, SameSite=Strict cookies;
+only SHA-256 token hashes are persisted. Production cookies require HTTPS, with
+one-hour absolute and 15-minute idle expiry by default (demo: eight hours/30
+minutes). Polling counts as activity. Five concurrent sessions per user are kept.
+Password/role/access changes revoke sessions. Logout revokes its session.
+OIDC has a separate signed, short-lived SameSite=Lax state cookie for the
+cross-site callback; raw IdP tokens never enter the dashboard.
 
-## Scope of assurance
+Private writes require a session CSRF token and exact configured origin when an
+Origin header is present. Production requires explicit allowed hosts, secure
+cookies, an HTTPS origin, PostgreSQL, and a separate worker. Security headers
+include CSP, frame denial, no-sniff, same-origin referrers, and HSTS over HTTPS.
+Inline styles support computed visuals; inline scripts are prohibited. API
+responses use no-store. Static application files contain no cloud evidence.
 
-Tests cover anonymous access, roles, CSRF, cookie flags, expiry, revocation,
-last-admin protection, throttling, and sanitized error paths. Docker runtime,
-live-cloud credentials, real SMTP, and browser flows still require the validation
-steps in [validation.md](validation.md). This release has not undergone a
-penetration test, independent security audit, or compliance certification.
-It does not encrypt the SQLite database at rest, implement automatic remediation,
-or establish production safety for the synthetic-trained anomaly model.
+## Cloud credentials and data
+
+The operator-owned registry approves explicit accounts and regions. The browser
+cannot add accounts or submit credentials. Production credentials are acquired
+only by the worker: AWS role chains/assumed roles with external ID, explicit Azure
+managed/workload identity, or GCP workload identity/ADC and optional impersonation.
+GCP private service-account keys and developer user credentials are rejected on
+the approved path. Demo mode blocks cloud jobs unless an operator explicitly
+opts into local collector development.
+
+Collectors use fixed HTTPS provider hosts, reject redirects/unrelated pagination,
+bound responses and retries, and issue no remediation calls. Resource/event
+accounts are checked against approval before snapshots commit. Provider errors
+are sanitized. Missing or inaccessible data remains unknown/partial.
+
+Deployment secrets are file-backed, excluded from Git/build context, and not
+accepted as UI fields. The default production PostgreSQL connection uses TLS
+verify-full against a private CA. Caddy terminates browser HTTPS. API networking
+is internal by default; optional OIDC adds identity-provider egress. Only the
+worker mounts cloud identity files. Docker egress networks do not constitute a
+provider-destination firewall; configure host/platform controls if required.
+
+## Logs, storage, and recovery
+
+Production request logs contain UTC time, request ID, route template, status,
+and duration. Errors log exception type and code location, without provider
+messages, request bodies, query strings, or credentials. Uvicorn access logging
+is disabled to avoid logging authorization codes in callback URLs. Protect the
+operator audit log and export it to your organization's logging system as needed;
+it is not an externally immutable compliance ledger.
+
+Backups contain sensitive evidence and password hashes. Checksums detect damage,
+not authenticity; encrypt archives externally and restore only trusted backups.
+Restores revoke sessions, pause schedules/jobs, and suppress queued email.
+Trusted joblib artifacts can execute Python during loading: protect the model
+volume and never install third-party artifacts from users.
+
+There is no security certification or completed penetration test. Before exposing
+a deployment, complete the [rollout checks](validation.md), review permissions,
+rotate/restrict credentials, and test recovery in your environment. Report issues
+using the process in [SECURITY.md](../SECURITY.md).

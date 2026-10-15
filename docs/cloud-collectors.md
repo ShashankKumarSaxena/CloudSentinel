@@ -1,45 +1,64 @@
-# Read-only cloud collectors
+# Read-only cloud collection
 
-Collection starts when an analyst/administrator submits Cloud connections, or
-when an explicitly configured live schedule runs. Startup, training, demo scans,
-and status checks do not contact real accounts. Credentials stay in local
-SDK/CLI chains or explicitly configured local token file mounts. AWS SDK stubs and mocked REST responses validate
-mapping and failure behavior; no live-account verification is claimed.
+Production collection requires operator-approved accounts in the read-only JSON
+registry. Startup/status checks do not contact clouds. An analyst selects an
+approved connection and region; a dedicated worker acquires credentials, collects
+bounded evidence, and records coverage. There is no key/token form in the UI.
+No cloud resources, IAM bindings, or policies are modified by the application.
 
-## Authentication and access
+## Approval and identity
 
-| Provider | Local authentication | Implemented reads |
+Copy `config/accounts.example.json` to ignored `config/accounts.local.json`.
+Examples are disabled. Configure an explicit unique connection ID, provider,
+account, regions, credential method, and enabled flag. The registry allows up to
+500 accounts and rejects unknown fields/duplicate IDs. API and worker re-read it
+for submissions/execution; edit it with an operator-controlled process and verify
+both containers see the same version. If a host-side atomic file replacement
+leaves an old Docker bind mount, recreate both containers to apply it.
+
+| Provider | Production identity | Scope |
 | --- | --- | --- |
-| AWS | boto3 profile/environment/SSO/role chain | STS identity; regional S3 metadata; security groups; IAM users/MFA; CloudTrail trails/status/history |
-| Azure | Azure CLI Resource Manager token or local token file | Storage account/containers; network security groups; Activity Log |
-| GCP | gcloud access token or local token file | Bucket list/IAM; firewall list; visible audit-log entries |
+| AWS | boto3 default workload chain, or AssumeRole with exact account ARN and required external ID | Explicit region plus global IAM user observations |
+| Azure | Explicit ManagedIdentityCredential or WorkloadIdentityCredential; tenant/client IDs for federation | Subscription-wide; `regions: ["global"]` |
+| GCP | Workload identity/ADC, optionally impersonating a service account | Project-wide; `regions: ["global"]` |
 
-AWS actions used: `sts:GetCallerIdentity`, `s3:ListAllMyBuckets`,
-`s3:GetBucketLocation`, `s3:GetBucketPublicAccessBlock`,
-`s3:GetAccountPublicAccessBlock`, `s3:GetBucketPolicyStatus`, `s3:GetBucketAcl`,
-`s3:GetEncryptionConfiguration`, `ec2:DescribeSecurityGroups`, `iam:ListUsers`,
-`iam:ListMFADevices`, `cloudtrail:DescribeTrails`, `cloudtrail:GetTrailStatus`,
-and `cloudtrail:LookupEvents`. Scope permissions to the relevant resources;
-the application never creates roles or attaches policies.
+AWS verifies the account using STS. Assumed roles request 900-second credentials;
+the source identity needs permission to assume the target role. Bind its trust
+policy to the source principal and unique external ID. Review the
+[AWS external-ID guidance](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_common-scenarios_third-party.html).
 
-Azure read permissions cover `Microsoft.Storage/storageAccounts/read`,
-`Microsoft.Storage/storageAccounts/blobServices/containers/read`,
-`Microsoft.Network/networkSecurityGroups/read`, and
-`Microsoft.Insights/eventtypes/values/read` at the selected scope.
+Azure uses provider-supported refreshable credentials chosen explicitly, without
+a production fallback to the developer CLI. System-assigned identity is suitable
+on a configured Azure host; federation requires a rotated local subject-token
+file and matching identity trust. See
+[Azure managed identity](https://learn.microsoft.com/en-us/azure/developer/python/sdk/authentication/system-assigned-managed-identity).
 
-GCP permissions include `storage.buckets.list`, `storage.buckets.getIamPolicy`,
-`compute.firewalls.list`, and logging-entry read permissions for the selected log
-types. Private Data Access logs may require additional read access.
+GCP uses refreshable ADC/federation and can request short-lived impersonated
+credentials. Private service-account keys and developer authorized-user
+credentials are rejected on the approved path. External-account configurations
+and rotating subject tokens must be mounted only on the worker. See
+[application default credentials](https://docs.cloud.google.com/docs/authentication/application-default-credentials)
+and [workload identity federation](https://docs.cloud.google.com/iam/docs/workload-identity-federation).
 
-The form accepts identifiers only: expected AWS account and region, Azure
-subscription, or GCP project. Azure/GCP also support `AZURE_SUBSCRIPTION_ID` and
-`GOOGLE_CLOUD_PROJECT`. AWS can verify the expected account through STS.
-The collection API never accepts access keys, passwords, tokens, or service-account files.
-Phase 3 login is a separate local workspace account flow. Azure/GCP token file
-settings (`CLOUDSENTINEL_AZURE_TOKEN_FILE`, `CLOUDSENTINEL_GCP_TOKEN_FILE`) are
-server-side only, bounded to 16 KiB and read at collection time. Containers
-do not include provider CLIs. See [deployment.md](deployment.md) for explicit
-read-only mount configuration, permissions, and local expiry management.
+`deploy/production/` contains worker-only federation mount examples. The operator
+or platform must issue and rotate tokens; Compose and CloudSentinel do not do so.
+The worker closes SDK clients/transports after a collection. Credential or provider
+exceptions become safe errors rather than token-bearing response text.
+
+## Permissions
+
+Start with `config/policies/aws-readonly.json`, `aws-trust.example.json`,
+`azure-readonly.example.json`, and `gcp-readonly.yaml`. These are reviewable
+starting templates, not policies automatically installed by the app. Restrict
+principal/resource/subscription/project scopes and test the supported reads with
+your cloud administrator. Some list APIs require wildcard resource scope. GCP
+private Data Access logs may require additional explicit permissions.
+
+AWS reads identity, S3 public-access/encryption metadata, EC2 security groups,
+IAM users/MFA, and CloudTrail trail status/management history. Azure reads storage
+accounts/containers, network security groups, and Activity Log. GCP reads bucket
+list/IAM, firewall rules, and visible audit-log entries. None provides exhaustive
+effective-permission evaluation or complete organization-wide activity coverage.
 
 ## Mapping limits
 
@@ -70,19 +89,27 @@ entries visible to the authenticated identity.
 
 ## Bounds and failures
 
-Limits: 1,000 resources; 10,000 events; 30 pages per API listing; 1–168 hour
-lookback; approximately two minutes plus any in-flight request timeout. REST
-responses are limited to 8 MB, with request timeouts and bounded transient retries.
-Repeated pagination links/tokens are rejected.
+Limits are 1,000 resources, 10,000 events, 30 pages per listing, and a 1–168-hour
+lookback. The collection budget is approximately two minutes plus an in-flight
+request; network requests/retries and response sizes are bounded. REST responses
+are capped at 8 MB. Repeated pagination links/tokens and unexpected HTTPS
+hosts/redirects are rejected. A stuck dedicated worker exits after its heartbeat
+watchdog expires; interrupted job recovery is bounded.
 
-Only fixed HTTPS provider hosts are accepted. Redirects and unrelated pagination
-destinations are rejected to protect bearer tokens. Provider response bodies,
-exception strings, and CLI stdout/stderr are never returned as errors.
+Unavailable scopes are saved as partial coverage. No supported resources means
+the collection fails and the previous valid account snapshot is preserved.
+Resources/events are checked against the approved account/provider before commit.
+Do not interpret a partial scan, missing activity, or an unknown check as safe.
+Real provider permissions/identity/network behavior still require local validation;
+current provider mapping evidence uses SDK stubs and mocked responses.
 
-Unavailable/unsupported scopes are saved in coverage. Partial results are not a
-clean-account verdict. No supported resources means collection fails and the
-latest valid scan is preserved. One scan/collection/training mutation runs at a
-time in the local process. No mutation or remediation cloud API is called.
+## Local collector development
+
+Demo mode is offline by default. Legacy CLI/token-file adapters remain for
+explicit local development and mapping tests. To test approved jobs locally,
+configure a registry and deliberately set `CLOUDSENTINEL_ALLOW_LIVE_IN_DEMO=1`.
+The old synchronous `/scans/collect` route is demo-only; production directs
+clients to `/cloud/jobs`. Avoid using the demo workspace for organization evidence.
 
 ## API references
 

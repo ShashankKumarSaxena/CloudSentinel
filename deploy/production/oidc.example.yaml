@@ -1,0 +1,17 @@
+# Add to the base production Compose file after registering the HTTPS callback.
+services:
+  api:
+    environment:
+      CLOUDSENTINEL_OIDC_ISSUER: https://identity.example.com/realms/company
+      CLOUDSENTINEL_OIDC_CLIENT_ID: cloudsentinel
+      CLOUDSENTINEL_OIDC_CLIENT_SECRET_FILE: /run/secrets/oidc_client_secret
+      CLOUDSENTINEL_OIDC_STATE_SECRET_FILE: /run/secrets/oidc_state
+    secrets: [oidc_client_secret, oidc_state]
+    networks: [application, identity-egress]
+
+secrets:
+  oidc_client_secret: {file: ../../secrets/production/oidc_client_secret}
+  oidc_state: {file: ../../secrets/production/oidc_state}
+
+networks:
+  identity-egress:

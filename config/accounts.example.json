@@ -1,0 +1,34 @@
+{
+  "schema_version": "1",
+  "accounts": [
+    {
+      "id": "aws-production",
+      "name": "AWS production",
+      "provider": "aws",
+      "account": "123456789012",
+      "regions": ["ap-south-1"],
+      "enabled": false,
+      "auth": "assume_role",
+      "aws_role_arn": "arn:aws:iam::123456789012:role/CloudSentinelReadOnly",
+      "aws_external_id": "replace-with-a-unique-external-id"
+    },
+    {
+      "id": "azure-production",
+      "name": "Azure production",
+      "provider": "azure",
+      "account": "00000000-0000-0000-0000-000000000000",
+      "regions": ["global"],
+      "enabled": false,
+      "auth": "managed_identity"
+    },
+    {
+      "id": "gcp-production",
+      "name": "GCP production",
+      "provider": "gcp",
+      "account": "replace-project-id",
+      "regions": ["global"],
+      "enabled": false,
+      "auth": "adc"
+    }
+  ]
+}

@@ -1,155 +1,141 @@
-# Operating the workspace
+# Operations
 
-## Monitoring and run history
+## Jobs, schedules, and ownership
 
-An administrator creates a schedule in Monitoring. Select a synthetic fixture or
-an explicit live provider/region/account scope. Intervals range from 60 seconds
-to seven days; the form offers common choices. New enabled schedules first run
-after their interval. **Run now** also works for paused schedules and does not
-enable them. Enable/pause and interval edits reset the next run time.
-There are no preconfigured schedules and no implicit live collection.
+An analyst submits an approved account collection in Cloud connections. The API
+requires an Idempotency-Key, returns 202, and persists the job before collection.
+Retries with the same user/key/payload return the same job; reusing the key for
+another payload returns 409. The queue defaults to 500 pending/running jobs.
+Only pending jobs can be cancelled. Account approval is checked again when a job
+executes, so disabling a registry entry stops queued work from using it.
 
-The background worker checks due work every two seconds. Each claim creates a
-saved run and a five-minute lease in one SQLite transaction. Only one process
-can own the database's monitoring lock; use one server worker and one replica.
-Manual scans, live collections, and model training share a mutation lock with
-scheduled scans. A busy operation defers the scheduled run for ten seconds
-without counting it as a failure. Editing a running schedule returns 409.
+The worker checks work every two seconds, processing bounded collections serially.
+The production worker holds a dedicated PostgreSQL advisory lock and a persisted
+fencing identity. A replacement worker invalidates old claims before snapshots
+or schedule completion can publish. A stale or failed worker exits for Docker
+restart. Interrupted jobs retry up to three claimed attempts, then fail. Work is
+at least once: a scan committed immediately before a crash may be repeated in
+history. Review failures and provider request budgets rather than assuming an
+exactly-once cloud read.
 
-Successful runs save a scan ID and schedule the next run relative to completion.
-Failures preserve prior scans, record a safe error, and retry with increasing
-backoff (60 seconds up to one hour). Missed intervals coalesce to one due run,
-rather than replaying every missed execution. Work is local and synchronous;
-there is no distributed task queue or execution while the service is stopped.
+Administrators create schedules with 60-second to seven-day intervals. New
+enabled schedules first run after their interval. In production, Run now moves
+an **enabled** schedule due immediately for the worker; it does not collect in
+the API. Enable paused schedules before running them. Demo mode retains immediate
+manual runs, including paused schedules. Editing a running schedule returns 409.
+Failures back off from 60 seconds up to one hour; busy scans defer ten seconds.
+Missed intervals coalesce to one run. Interrupted scheduled runs recover after
+restart. There is no execution while the worker is stopped and no distributed
+scheduler or supported multiple-worker scaling.
 
-On restart, the owner of the process lock marks running records interrupted,
-releases stale leases, and makes enabled interrupted work due again after ten
-seconds. A scan already committed before a crash remains in history even if its
-run record could not be finalized. Finding deduplication prevents another inbox
-entry for the same fingerprint. Recent run lists show the latest 100 records;
-older records remain in SQLite.
+## Alert review and recurrence
 
-## Alert lifecycle
+Snapshots, alert observations, account pointers, and scan audits commit together.
+The inbox includes findings, incomplete coverage, and collection/schedule failures.
+Repeat observations of an active finding do not flood the inbox. An explicit
+passing configuration check ends that alert episode; a later failure opens a new
+one. Resolving a configuration finding that still fails on the next scan reopens
+its disposition and alerts for review. Missing/unknown checks never count as a
+pass. Reviewing an ML finding does not re-alert the identical historical window.
+Acknowledgment, finding disposition, and verified cloud remediation are separate.
 
-A completed scan and its alert/audit inserts commit in one transaction. Failure
-to save the associated operations data also rolls back the scan. Alerts cover:
+Alerts have bounded pagination; filters apply to the loaded page. Jobs expose
+pagination too. The interface polls rather than using websockets. Run/audit views
+show recent records; older records remain stored until explicit maintenance.
 
-- Configuration and ML findings, including method/provider/account evidence.
-- Partial collection coverage, with unavailable scopes.
-- Scheduled-run failures, deduplicated within each failure episode.
+SMTP is opt-in. New alerts at/above the configured severity enter a durable
+outbox. Failed attempts retry at 60/120/240/480 seconds and stop after five
+attempts. Administrators can retry failed delivery. Messages use a stable
+Message-ID and minimal source/alert summary. Delivery is **at least once**: an SMTP
+acceptance followed by a crash can create a duplicate message. Existing
+inbox-only alerts are not automatically queued after SMTP is enabled.
 
-Finding alerts are keyed by source, provider, account, and stable finding ID.
-Repeated snapshots do not flood the inbox. Deduplication is permanent for the
-fingerprint in this release: a recurring identical finding does not re-open an
-acknowledged alert or create a new alert episode. Resolved team dispositions are
-not re-alerted. Coverage alerts deduplicate equivalent failed scope sets; a
-schedule failure can create a new episode after a successful run.
+## Health and diagnostics
 
-Alert inbox displays pages of 200; search/review filtering applies to the current
-page. It reports total and unreviewed counts, source, severity, delivery status,
-and evidence. Analysts/administrators can acknowledge alerts. Acknowledgment is
-independent of finding triage and does not verify cloud remediation or cancel an
-email already queued. All roles can inspect the shared inbox.
+| Endpoint/tool | Meaning |
+| --- | --- |
+| `/api/v1/health` | Public process liveness; no cloud connectivity assertion |
+| `/api/v1/ready` | Database, administrator setup, valid registry, and fresh production worker heartbeat; returns 503 when unavailable |
+| `/api/v1/operations` | Authenticated worker, schedule, email, unread-alert status |
+| `python scripts/preflight.py` | Configuration/dependency check without database, cloud, IdP, or SMTP access |
+| `python scripts/smoke_test.py --url https://YOUR_DOMAIN --authenticated` | Running server checks; prompts for local credentials |
 
-The inbox is refreshed every 30 seconds while visible; monitoring status/run
-lists refresh every 15 seconds. The main snapshot/history counters refresh every
-30 seconds. Refresh buttons are available. There is no websocket stream.
+Production logs are JSON with request IDs, route templates, status, and duration.
+The same request ID is returned as a response header. Monitor worker health,
+queue age, failures, unavailable coverage, PostgreSQL capacity, free disk,
+certificate expiry, backups, and mail failures through your existing operations
+platform. No hosted metrics exporter, on-call routing, or external immutable
+audit integration is bundled.
 
-## Optional email
+Use `scripts/manage_users.py reset-password --username owner` through the running
+API container for local password recovery. The command prompts securely and
+revokes sessions; it does not re-enable disabled users. The CLI reads the same
+deployment settings/secret files as the application.
 
-Default operation is **inbox only**. To deliver externally, explicitly configure
-`CLOUDSENTINEL_SMTP_ENABLED=1`, host, sender, and comma-separated recipients.
-Use `starttls` (typically port 587) or `ssl` (typically 465), with verified TLS.
-A username may be configured; its password is read from
-`CLOUDSENTINEL_SMTP_PASSWORD_FILE` at delivery time. Credentials never enter the
-UI. See `.env.example` and [deployment.md](deployment.md) for settings/mounts.
+## PostgreSQL backup and fresh-project restore
 
-New alerts at or above `CLOUDSENTINEL_ALERT_MIN_SEVERITY` (default `high`) enter
-the durable outbox. Synthetic alerts are eligible too; review recipients before
-enabling. Medium ML findings require a `medium` threshold. Existing inbox-only
-alerts are not automatically queued after enabling SMTP.
-
-A pending delivery is claimed with a lease and saved attempt count. Failed
-attempts retry after 60, 120, 240, and 480 seconds, with a terminal failure after
-five attempts. Administrators can retry a failed delivery from its alert drawer
-once server SMTP is configured. Pending deliveries survive restart; delivery
-stops while SMTP or the worker is disabled. Recovery restores interrupted
-attempts without exceeding the limit.
-
-Messages include source, alert ID, a severity subject, and a minimal summary.
-Detailed cloud evidence stays in the workspace. A stable Message-ID accompanies
-retries. SMTP delivery is **at-least-once**: a crash after server acceptance and
-before saving success can produce a duplicate. The inbox fingerprint prevents
-repeated scan alerts, not duplicate acceptance by an external mail server.
-No real SMTP messages were sent during implementation; transport tests are mocked.
-
-## Access and audit
-
-Create the first administrator with `make create-admin` on the host, or the
-container command in [deployment.md](deployment.md). Administrators create other
-accounts and inspect the latest 200 audit records in Team & access.
-Audit records cover logins, user/password changes, scans/model training, schedule
-outcomes, triage, alert acknowledgment/delivery, and report exports. They are
-operational records, not an immutable external audit ledger; someone with local
-database access can modify them.
-
-Password changes, role changes, and disabling access revoke account sessions.
-To recover a forgotten password as the local operator:
+From the root, with the production deployment running:
 
 ```bash
-.venv/bin/python scripts/manage_users.py reset-password --username owner
+python3 scripts/production_backup.py backup backups/workspace-2026-10-15.tar.gz
 ```
 
-Use the same `CLOUDSENTINEL_DB` value as the running service. Resetting a password
-does not re-enable a disabled user. Another administrator manages enabled status.
-Local operator scripts can access the data directory directly; browser roles do
-not protect against someone who controls the host.
+The helper uses `deploy/production/.env`, a custom-format `pg_dump`, model copies,
+and a checksummed private archive. Use new filenames. Stop retraining during
+backup for consistent database/model pairing. Backups contain evidence and
+password hashes, are **not encrypted**, and must be encrypted/protected off-host.
+Checksums do not authenticate an archive. Only restore trusted local backups.
+Back up deployment configuration and private CA/secrets separately.
 
-## Backup and restore
-
-Use a private destination and distinct archive names:
+Restore into a **fresh Compose project** with an empty database/model volume;
+keep the original project for rollback. Start only the new database first:
 
 ```bash
-.venv/bin/python scripts/backup.py backup backups/cloudsentinel-2026-10-15.tar.gz
+docker compose --env-file deploy/production/.env -f deploy/production/compose.yaml -p cloudsentinel-recovery up -d database
+# Wait for its health check before restoring:
+python3 scripts/production_backup.py restore backups/workspace-2026-10-15.tar.gz --project cloudsentinel-recovery
 ```
 
-The script uses SQLite's online backup API, removes sessions only in the copy,
-consolidates WAL data, includes completed sibling model artifacts/active pointer,
-and writes a checksum manifest in a mode-600 gzip archive. Active users keep
-their sessions. Model versions are immutable, but avoid retraining during a
-backup if you need an exact database/model-point-in-time pair.
-The archive includes password hashes and account evidence. It is **not encrypted**.
-Protect or externally encrypt it. Checksums detect corruption, not authenticity.
-Only restore trusted locally generated archives.
+The restore helper requires stopped API/worker and an empty database. It validates
+archive paths/checksums/bounds before database restore, uses one PostgreSQL restore
+transaction, copies trusted models, revokes sessions, pauses schedules, cancels
+unfinished jobs, and suppresses queued email. It does not start the app. Review
+scope and restored evidence before starting services and re-enabling automation.
+If restore fails after database commit/model copy, retry into another fresh
+project; it will not overwrite partial state. The helper uses the base Compose
+file only; apply any identity/SSO/email overlays when starting the recovered app.
+Do not run two recovery proxies on the same 80/443 ports.
 
-Stop the service before offline restore. Choose a fresh data directory:
+## SQLite demo backup
 
 ```bash
-.venv/bin/python scripts/backup.py restore backups/cloudsentinel-2026-10-15.tar.gz \
-  --database .runtime-restored/cloudsentinel.db
+.venv/bin/python scripts/backup.py backup backups/demo.tar.gz
+# Stop the demo, then restore into a fresh directory:
+.venv/bin/python scripts/backup.py restore backups/demo.tar.gz --database .runtime-restored/cloudsentinel.db
 CLOUDSENTINEL_DB="$PWD/.runtime-restored/cloudsentinel.db" bash scripts/demo.sh
 ```
 
-Restore rejects existing databases/model directories, unsafe paths, links,
-duplicate archive entries, archives above 1 GB, bad checksums, and failed SQLite
-integrity checks. Users, scans, triage, completed models, alerts, and audit records
-are retained; sessions are removed, schedules paused, and pending/sending emails
-converted to inbox-only. Sign in and review scope before enabling schedules.
+SQLite online backup preserves the live source and excludes sessions from the
+copy. Restore validates checksums and database integrity, pauses automation,
+clears worker heartbeat, and cancels unfinished jobs. Model artifacts must be in
+the sibling `models/` directory for inclusion. Never remove active WAL/SHM files.
 
-Backups by default use `.runtime/cloudsentinel.db`, or `CLOUDSENTINEL_DB` if set.
-The `--database` option selects a specific database. Server model artifacts must
-be in the sibling `models/` directory for inclusion. See
-[deployment.md](deployment.md) for Docker-volume backup/recovery.
+## Retention and upgrades
 
-## Health and storage
+Retention is explicit, defaults to dry run, and preserves at least 30 days:
 
-`GET /api/v1/health` is public liveness plus model readiness metadata.
-`GET /api/v1/ready` returns 200 only when the database/model/account setup is
-ready and an enabled worker is alive; otherwise 503. `/api/v1/operations` is
-signed-in operational status, including worker error/heartbeat and unread count.
-No public endpoint returns cloud evidence, credentials, or account lists.
+```bash
+# Use inside the production API container, with its deployment configuration:
+python scripts/retention.py --days 90
+python scripts/retention.py --days 90 --apply
+```
 
-State and completed model versions grow over time; there is no automatic
-retention cleanup. Review disk usage, run frequency, backup size, and host storage.
-Do not delete SQLite WAL/SHM files while the service is running. Keep the same
-single-process ownership model when copying/migrating a workspace.
+It removes eligible old scans, terminal jobs/runs, and acknowledged terminal
+alerts; preserves latest/current account snapshots, unfinished work, and the
+audit log; and records applied maintenance. Audit and triage history still grow:
+plan archive/storage capacity under your organization's retention policy.
+Backup before upgrades or applying maintenance. Migrations are transactional and
+versioned, with no automatic downgrade. Restore a pre-upgrade backup into a fresh
+project for rollback. Older scan evidence stays immutable; new configuration
+fingerprints include account identity, so legacy triage IDs are not transferred
+to newly generated finding IDs.

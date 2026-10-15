@@ -1,5 +1,8 @@
 # Phase 1 working foundation and demo
 
+> Historical implementation milestone. For current behavior and deployment, see
+> [README](../README.md), [architecture](architecture.md), and [deployment](deployment.md).
+
 The original abstract proposes a machine learning detector for AWS, Azure, and
 GCP configuration and activity data. It does not specify phases. The user
 confirmed that Phase 1 should be a working foundation and demo.

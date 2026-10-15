@@ -1,0 +1,9 @@
+# A trusted external identity agent must maintain the token; this app never
+# creates an identity provider or writes cloud IAM policies automatically.
+services:
+  worker:
+    environment:
+      AWS_ROLE_ARN: arn:aws:iam::111111111111:role/CloudSentinelWorker
+      AWS_WEB_IDENTITY_TOKEN_FILE: /run/workload/aws/token
+    volumes:
+      - ${CLOUDSENTINEL_AWS_IDENTITY_DIRECTORY:?Set the externally managed token directory}:/run/workload/aws:ro

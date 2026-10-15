@@ -3,8 +3,8 @@ import json
 import tempfile
 import unittest
 
-from backend.app.models import Inventory
-from backend.app.store import Store
+from backend.app.domain.schemas import Inventory
+from backend.app.repositories.store import Store
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -14,7 +14,9 @@ class StoreTest(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory()
         self.path = Path(self.temp.name) / "test.db"
         self.store = Store(self.path)
-        self.inventory = Inventory.model_validate_json((ROOT / "data/demo_inventory.json").read_text())
+        self.inventory = Inventory.model_validate_json(
+            (ROOT / "data/demo_inventory.json").read_text()
+        )
 
     def tearDown(self):
         self.temp.cleanup()
@@ -68,7 +70,9 @@ class StoreTest(unittest.TestCase):
         self.assertEqual(loaded["activity"]["windows"], [])
         self.assertTrue(all(f["detection_method"] == "rule" for f in loaded["findings"]))
         with self.store.connection() as conn:
-            unchanged = conn.execute("SELECT snapshot FROM scans WHERE id = ?", (scan["id"],)).fetchone()[0]
+            unchanged = conn.execute(
+                "SELECT snapshot FROM scans WHERE id = ?", (scan["id"],)
+            ).fetchone()[0]
         self.assertEqual(unchanged, encoded)
 
 

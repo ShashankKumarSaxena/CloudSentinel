@@ -1,0 +1,15 @@
+{
+  "Name": "CloudSentinel Configuration Reader",
+  "IsCustom": true,
+  "Description": "Read supported configuration and management activity without data-plane access.",
+  "Actions": [
+    "Microsoft.Storage/storageAccounts/read",
+    "Microsoft.Storage/storageAccounts/blobServices/containers/read",
+    "Microsoft.Network/networkSecurityGroups/read",
+    "Microsoft.Insights/eventtypes/values/read"
+  ],
+  "NotActions": [],
+  "DataActions": [],
+  "NotDataActions": [],
+  "AssignableScopes": ["/subscriptions/replace-subscription-id"]
+}

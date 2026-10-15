@@ -1,0 +1,22 @@
+# Both processes classify alerts consistently; only the worker gets the password.
+x-smtp: &smtp
+  CLOUDSENTINEL_SMTP_ENABLED: '1'
+  CLOUDSENTINEL_SMTP_HOST: smtp.example.com
+  CLOUDSENTINEL_SMTP_PORT: '587'
+  CLOUDSENTINEL_SMTP_TLS: starttls
+  CLOUDSENTINEL_SMTP_FROM: cloudsentinel@example.com
+  CLOUDSENTINEL_SMTP_TO: security@example.com
+  CLOUDSENTINEL_SMTP_USER: cloudsentinel@example.com
+  CLOUDSENTINEL_ALERT_MIN_SEVERITY: medium
+
+services:
+  api:
+    environment: *smtp
+  worker:
+    environment:
+      <<: *smtp
+      CLOUDSENTINEL_SMTP_PASSWORD_FILE: /run/secrets/smtp_password
+    secrets: [smtp_password]
+
+secrets:
+  smtp_password: {file: ../../secrets/production/smtp_password}

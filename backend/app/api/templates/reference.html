@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>CloudSentinel API reference</title>
+    <style>
+      body {
+        max-width: 1100px;
+        margin: 40px auto;
+        padding: 0 24px;
+        font: 16px system-ui;
+        color: #253633;
+        background: #f6f8f7;
+      }
+      a { color: #247a64; }
+      table { width: 100%; margin-top: 24px; background: white; border-collapse: collapse; }
+      td, th { padding: 12px; text-align: left; border-bottom: 1px solid #e5eae7; }
+      code { overflow-wrap: anywhere; }
+      p { line-height: 1.6; }
+    </style>
+  </head>
+  <body>
+    <h1>CloudSentinel API reference</h1>
+    <p>
+      Private routes require a signed-in session. Writes also require the session
+      CSRF token in <code>X-CSRF-Token</code>. Viewer, analyst, and administrator
+      permissions are enforced by the server.
+    </p>
+    <p>
+      <a href="/">Return to workspace</a> ·
+      <a href="/openapi.json">OpenAPI JSON schemas and request contracts</a>
+    </p>
+    <table>
+      <thead><tr><th>Method</th><th>Route</th><th>Operation</th></tr></thead>
+      <tbody>$rows</tbody>
+    </table>
+  </body>
+</html>
