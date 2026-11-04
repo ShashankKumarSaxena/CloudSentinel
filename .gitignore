@@ -10,7 +10,8 @@ frontend/dist/
 *.db-wal
 .runtime/
 .runtime-*/
-coverage/
+/coverage/
+/frontend/coverage/
 *.joblib
 *.pkl
 *.pickle
