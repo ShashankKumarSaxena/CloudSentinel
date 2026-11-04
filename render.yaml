@@ -1,0 +1,17 @@
+# Render Blueprint for the hosted offline demo (synthetic data, no cloud access).
+# Render prompts for the two passwords when the Blueprint is created; they are never stored in Git.
+services:
+  - type: web
+    name: cloudsentinel-demo
+    runtime: docker
+    plan: free
+    region: singapore
+    branch: master
+    dockerfilePath: ./deploy/render/Dockerfile
+    dockerContext: .
+    autoDeploy: false
+    envVars:
+      - key: CLOUDSENTINEL_DEMO_ADMIN_PASSWORD
+        sync: false
+      - key: CLOUDSENTINEL_DEMO_VIEWER_PASSWORD
+        sync: false

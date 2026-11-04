@@ -41,6 +41,9 @@ docker compose exec cloudsentinel python scripts/manage_users.py create-admin
 The root Compose file builds the **demo** target and binds to loopback. Production
 uses a different Compose file, database, volumes, and configuration.
 
+To share the demo over the internet, `render.yaml` deploys it to Render; see
+[Hosted demo on Render](docs/deployment.md#hosted-demo-on-render).
+
 ## Deploy for real cloud accounts
 
 Follow the [production deployment guide](docs/deployment.md). It covers DNS/HTTPS,

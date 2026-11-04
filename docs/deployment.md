@@ -19,6 +19,21 @@ Open http://127.0.0.1:8000. To select another demo port, run
 `CLOUDSENTINEL_PORT=8001 docker compose up -d --build`.
 The named `cloudsentinel-data` volume retains SQLite and the synthetic model.
 
+## Hosted demo on Render
+
+`render.yaml` deploys the offline demo (synthetic data, no cloud access) to a
+Render free web service using `deploy/render/Dockerfile`. In Render, choose
+**New > Blueprint**, select this repository, and enter the two requested
+passwords (12–256 characters). Render has no interactive shell and resets local
+storage on restart, so `scripts/bootstrap_hosted_demo.py` creates the `admin`
+and read-only `viewer` accounts from those secrets at each start; it runs only
+in demo mode and leaves existing accounts unchanged. The start script allows
+only Render's assigned hostname and enables secure cookies.
+
+Expect a cold start of about a minute after 15 idle minutes, and a fresh
+synthetic snapshot after each restart. Deploys are manual (`autoDeploy: false`).
+This is a demonstration host, not the production deployment below.
+
 ## Production prerequisites
 
 Use a maintained Linux host with Docker Engine and Compose v2, sufficient disk
